@@ -586,7 +586,47 @@
     function SettingsModal({ onClose, cls, setCls, mbs, setMbs, taskTypes, setTaskTypes, t, currentUser }) {
       const isAdmin = currentUser?.role === "admin";
       const isManager = currentUser?.role === "manager" || isAdmin;
+      const [newUser, setNewUser] = useState({
+         email: "",
+         password: "",
+         name: ""
+       });
+      const createUserFromApp = async () => {
+        try {
+          setMsgUser("Criando usuário...");
 
+          const token = _session?.access_token;
+
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "apikey": SUPABASE_ANON_KEY,
+               "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(newUser)
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            setMsgUser("Erro: " + data.error);
+            return;
+          }
+
+          setMsgUser("Usuário criado com sucesso ✅");
+
+          setNewUser({
+            email: "",
+            password: "",
+            name: ""
+          });
+
+        } catch (e) {
+          setMsgUser("Erro: " + e.message);
+        }
+      };
+      const [msgUser, setMsgUser] = useState("");
       const tabs = [
         { id:"clients", label:"🏢 Clientes", show:true },
         { id:"members", label:"👤 Equipe", show:true },
@@ -798,6 +838,65 @@
 
               {tab==="users" && isAdmin && (
                 <div>
+                <div style={{
+                   marginTop:20,
+                   padding:14,
+                   background:t.colBg,
+                   borderRadius:8,
+                   border:"1px dashed " + t.brd
+                 }}>
+                   <div style={{
+                      fontSize:11,
+                      fontWeight:700,
+                      color:t.mut,
+                      marginBottom:10,
+                      textTransform:"uppercase"
+                    }}>
+                      ➕ Criar novo usuário
+                    </div>
+
+                    <div style={{ display:"grid", gap:8 }}>
+                      <input
+                        placeholder="Email"
+                        value={newUser.email}
+                        onChange={e=>setNewUser(p=>({...p,email:e.target.value}))}
+                        style={iS}
+                     />
+
+                     <input
+                       placeholder="Senha"
+                       value={newUser.password}
+                       onChange={e=>setNewUser(p=>({...p,password:e.target.value}))}
+                       style={iS}
+                     />
+
+                     <input
+                      placeholder="Nome"
+                      value={newUser.name}
+                      onChange={e=>setNewUser(p=>({...p,name:e.target.value}))}
+                      style={iS}
+                     />
+
+                     <button
+                       onClick={createUserFromApp}
+                       style={{
+                         padding:10,
+                         borderRadius:8,
+                         background:"#0984E3",
+                         color:"#fff",
+                         border:"none",
+                         fontWeight:700
+                       }}
+                     >
+                       Criar usuário
+                     </button>
+
+                     <div style={{ fontSize:12, color:t.mut }}>
+                       {msgUser}
+                     </div>
+                   </div>
+                 </div>
+               )}
                   <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>
                     Controle de acesso ({mbs.length} usuários)
                   </div>
