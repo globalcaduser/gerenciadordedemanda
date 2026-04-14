@@ -1,45 +1,45 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GlobalCad — Gestão de Tarefas</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📋</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { overflow-x: hidden; font-family: 'DM Sans', 'Segoe UI', sans-serif; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #4a4a5a; border-radius: 3px; }
-  select, input, textarea, button { font-family: inherit; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-  .spin { animation: spin 0.8s linear infinite; display:inline-block; }
-  .fade-in { animation: fadeIn 0.2s ease; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GlobalCad — Gestão de Tarefas</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📋</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
 
-<!-- ── Dependências ── -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow-x: hidden; font-family: 'DM Sans', 'Segoe UI', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #4a4a5a; border-radius: 3px; }
+    select, input, textarea, button { font-family: inherit; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .spin { animation: spin 0.8s linear infinite; display:inline-block; }
+    .fade-in { animation: fadeIn 0.2s ease; }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 </head>
 
 <body>
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
-// ══════════════════════════════════════════════════════════════════
-// ⚙️  CONFIGURAÇÃO SUPABASE
-// Substitua pelos valores do seu projeto:
-// Dashboard → Settings → API → Project URL  e  anon key
-// ══════════════════════════════════════════════════════════════════
+/* =========================
+   CONFIG SUPABASE
+========================= */
 const SUPABASE_URL = "https://koetobzvkdohtmckugov.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uhoJre1bAFZEbnZlCV05Lg_CO9Ta77J";
 
-// ── Mini cliente Supabase (sem npm) ──────────────────────────────
+/* =========================
+   MINI CLIENT SUPABASE
+========================= */
 const sbHeaders = (token) => ({
   "Content-Type": "application/json",
   "apikey": SUPABASE_ANON_KEY,
@@ -49,144 +49,284 @@ const sbHeaders = (token) => ({
 let _session = null;
 const _listeners = [];
 
+async function fetchSupabaseUser(token) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: sbHeaders(token),
+  });
+  if (!r.ok) return null;
+  return await r.json();
+}
+
 const sb = {
-  // Auth
   auth: {
-  getSession: async () => {
-    const stored = localStorage.getItem("sb-session");
-    if (stored) {
-      _session = JSON.parse(stored);
-      return { data: { session: _session } };
-    }
-    return { data: { session: null } };
-  },
+    getSession: async () => {
+      const stored = localStorage.getItem("sb-session");
+      if (!stored) return { data: { session: null } };
 
-  signInWithPassword: async ({ email, password }) => {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await r.json();
-    if (data.access_token) {
-      _session = data;
-      localStorage.setItem("sb-session", JSON.stringify(data));
-      _listeners.forEach(fn => fn("SIGNED_IN", _session));
-      return { data: { session: _session }, error: null };
-    }
-    return { data: null, error: { message: data.error_description || data.msg || "Credenciais inválidas" } };
-  },
+      try {
+        const parsed = JSON.parse(stored);
+        if (!parsed?.access_token) {
+          localStorage.removeItem("sb-session");
+          return { data: { session: null } };
+        }
 
-  setSessionFromUrl: async () => {
-    const hash = window.location.hash.startsWith("#")
-      ? window.location.hash.slice(1)
-      : "";
-    const params = new URLSearchParams(hash);
+        if (!parsed.user) {
+          const user = await fetchSupabaseUser(parsed.access_token);
+          if (user) parsed.user = user;
+        }
 
-    const access_token = params.get("access_token");
-    const refresh_token = params.get("refresh_token");
-    const type = params.get("type");
-    const error = params.get("error");
-    const error_description = params.get("error_description");
+        _session = parsed;
+        localStorage.setItem("sb-session", JSON.stringify(parsed));
+        return { data: { session: parsed } };
+      } catch (e) {
+        localStorage.removeItem("sb-session");
+        _session = null;
+        return { data: { session: null } };
+      }
+    },
 
-    if (error) {
+    signInWithPassword: async ({ email, password }) => {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await r.json();
+
+      if (!r.ok || !data?.access_token) {
+        return {
+          data: null,
+          error: { message: data.error_description || data.msg || data.error || "Credenciais inválidas" }
+        };
+      }
+
+      const user = await fetchSupabaseUser(data.access_token);
+      const session = { ...data, user };
+
+      _session = session;
+      localStorage.setItem("sb-session", JSON.stringify(session));
+      _listeners.forEach(fn => fn("SIGNED_IN", session));
+
+      return { data: { session }, error: null };
+    },
+
+    setSessionFromUrl: async () => {
+      const rawHash = window.location.hash?.startsWith("#")
+        ? window.location.hash.slice(1)
+        : "";
+      const rawSearch = window.location.search?.startsWith("?")
+        ? window.location.search.slice(1)
+        : "";
+
+      const hashParams = new URLSearchParams(rawHash);
+      const searchParams = new URLSearchParams(rawSearch);
+
+      const access_token = hashParams.get("access_token") || searchParams.get("access_token");
+      const refresh_token = hashParams.get("refresh_token") || searchParams.get("refresh_token");
+      const type = hashParams.get("type") || searchParams.get("type");
+      const error = hashParams.get("error") || searchParams.get("error");
+      const error_description = hashParams.get("error_description") || searchParams.get("error_description");
+
+      if (error) {
+        return {
+          data: null,
+          error: { message: decodeURIComponent(error_description || error) }
+        };
+      }
+
+      if (!access_token || !refresh_token) {
+        return { data: { session: null, type: null }, error: null };
+      }
+
+      const user = await fetchSupabaseUser(access_token);
+
+      const session = {
+        access_token,
+        refresh_token,
+        token_type: hashParams.get("token_type") || searchParams.get("token_type") || "bearer",
+        expires_in: Number(hashParams.get("expires_in") || searchParams.get("expires_in") || 3600),
+        expires_at: Math.floor(Date.now() / 1000) + Number(hashParams.get("expires_in") || searchParams.get("expires_in") || 3600),
+        user
+      };
+
+      _session = session;
+      localStorage.setItem("sb-session", JSON.stringify(session));
+      _listeners.forEach(fn => fn("SIGNED_IN", session));
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      return { data: { session, type }, error: null };
+    },
+
+    updateUser: async ({ password }) => {
+      if (!_session?.access_token) {
+        return { data: null, error: { message: "Sessão inválida para redefinir senha." } };
+      }
+
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: "PUT",
+        headers: sbHeaders(_session.access_token),
+        body: JSON.stringify({ password })
+      });
+
+      const data = await r.json();
+
+      if (!r.ok) {
+        return {
+          data: null,
+          error: { message: data.msg || data.error_description || data.error || "Erro ao atualizar senha" }
+        };
+      }
+
+      return { data, error: null };
+    },
+
+    signOut: async () => {
+      _session = null;
+      localStorage.removeItem("sb-session");
+      _listeners.forEach(fn => fn("SIGNED_OUT", null));
+    },
+
+    onAuthStateChange: (fn) => {
+      _listeners.push(fn);
       return {
-        data: null,
-        error: { message: decodeURIComponent(error_description || error) }
+        data: {
+          subscription: {
+            unsubscribe: () => {}
+          }
+        }
       };
     }
+  },
 
-    if (!access_token || !refresh_token) {
-      return { data: { session: null, type: null }, error: null };
+  from: (table) => new QueryBuilder(table),
+
+  channel: (name) => ({
+    on: function(event, filter, cb) { this._cb = cb; this._filter = filter; return this; },
+    subscribe: function() {
+      this._interval = setInterval(async () => {
+        if (!_session?.access_token) return;
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/${this._filter?.table}?select=*&order=updated_at.desc&limit=1`,
+          { headers: sbHeaders(_session.access_token) }
+        );
+        if (r.ok) {
+          const d = await r.json();
+          if (d[0]) this._cb?.({ eventType: "UPDATE", new: d[0] });
+        }
+      }, 8000);
+      return this;
+    },
+    _unsubscribe: function() { clearInterval(this._interval); },
+  }),
+  removeChannel: (ch) => ch?._unsubscribe?.(),
+};
+
+class QueryBuilder {
+  constructor(table) {
+    this._table = table;
+    this._filters = [];
+    this._sel = "*";
+    this._order = null;
+    this._limit = null;
+    this._single = false;
+    this._method = "GET";
+    this._body = null;
+    this._upsert = false;
+  }
+  select(cols) { this._sel = cols || "*"; return this; }
+  eq(col, val) { this._filters.push(`${col}=eq.${encodeURIComponent(val)}`); return this; }
+  is(col, val) { this._filters.push(`${col}=is.${val}`); return this; }
+  order(col, { ascending = true } = {}) { this._order = `${col}.${ascending ? "asc" : "desc"}`; return this; }
+  limit(n) { this._limit = n; return this; }
+  single() { this._single = true; return this; }
+  insert(body) { this._method = "POST"; this._body = body; return this; }
+  update(body) { this._method = "PATCH"; this._body = body; return this; }
+  upsert(body) { this._method = "POST"; this._body = body; this._upsert = true; return this; }
+  delete() { this._method = "DELETE"; return this; }
+
+  async then(resolve, reject) {
+    try {
+      const token = _session?.access_token;
+      let url = `${SUPABASE_URL}/rest/v1/${this._table}`;
+      const params = [];
+
+      if (["GET", "DELETE", "PATCH"].includes(this._method)) {
+        params.push(`select=${encodeURIComponent(this._sel)}`);
+        this._filters.forEach(f => params.push(f));
+        if (this._order) params.push(`order=${this._order}`);
+        if (this._limit) params.push(`limit=${this._limit}`);
+      }
+
+      if (params.length) url += "?" + params.join("&");
+
+      const hdrs = {
+        ...sbHeaders(token),
+        "Prefer": this._single
+          ? "return=representation,count=exact"
+          : (this._method !== "GET" ? "return=representation" : ""),
+      };
+
+      if (this._upsert) hdrs["Prefer"] = "resolution=merge-duplicates,return=representation";
+
+      const res = await fetch(url, {
+        method: this._method,
+        headers: hdrs,
+        body: this._body ? JSON.stringify(this._body) : undefined,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        return resolve({ data: null, error: err });
+      }
+
+      if (res.status === 204) {
+        return resolve({ data: null, error: null });
+      }
+
+      const json = await res.json();
+      const data = this._single ? (Array.isArray(json) ? json[0] : json) : json;
+      return resolve({ data, error: null });
+    } catch (e) {
+      return resolve({ data: null, error: { message: e.message } });
     }
+  }
+}
 
-    const session = {
-      access_token,
-      refresh_token,
-      token_type: params.get("token_type") || "bearer",
-      expires_in: Number(params.get("expires_in") || 3600),
-      expires_at: Math.floor(Date.now() / 1000) + Number(params.get("expires_in") || 3600),
-      user: null
-    };
-
-    _session = session;
-    localStorage.setItem("sb-session", JSON.stringify(session));
-    _listeners.forEach(fn => fn("SIGNED_IN", _session));
-
-    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-
-    return { data: { session, type }, error: null };
-  },
-
-  updateUser: async ({ password }) => {
-    if (!_session?.access_token) {
-      return { data: null, error: { message: "Sessão inválida para redefinir senha." } };
-    }
-
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${_session.access_token}`
-      },
-      body: JSON.stringify({ password })
-    });
-
-    const data = await r.json();
-
-    if (!r.ok) {
-      return { data: null, error: { message: data.msg || data.error_description || data.error || "Erro ao atualizar senha" } };
-    }
-
-    return { data, error: null };
-  },
-
-  signOut: async () => {
-    _session = null;
-    localStorage.removeItem("sb-session");
-    _listeners.forEach(fn => fn("SIGNED_OUT", null));
-  },
-
-  onAuthStateChange: (fn) => {
-    _listeners.push(fn);
-    return { data: { subscription: { unsubscribe: () => {} } } };
-  },
-
-  inviteUserByEmail: async (email) => {
-    console.warn("inviteUserByEmail requer service role key. Use o Dashboard ou uma Edge Function.");
-    return { error: null };
-  },
-},
-// ══════════════════════════════════════════════════════════════════
-// 🎨 TEMA
-// ══════════════════════════════════════════════════════════════════
+/* =========================
+   UI / CONSTANTES
+========================= */
 const TH = {
   dark:  { bg:"#0F1117", card:"#1A1D27", colBg:"#14161E", colH:"#1C1F2A", text:"#E8E9ED", mut:"#6B7280", brd:"#2A2D3A", inp:"#14161E", navBg:"#0F1117" },
   light: { bg:"#F3F4F6", card:"#FFF",    colBg:"#F9FAFB", colH:"#EEF0F2", text:"#111827", mut:"#9CA3AF", brd:"#E5E7EB", inp:"#F3F4F6", navBg:"#FFF"    },
 };
 
-// ══════════════════════════════════════════════════════════════════
-// 📦 CONSTANTES / DADOS PADRÃO
-// ══════════════════════════════════════════════════════════════════
 const PRIORITIES = [
   { id:"baixa",      name:"Baixa",      color:"#74B9FF", icon:"↓" },
   { id:"media",      name:"Média",      color:"#FFEAA7", icon:"—" },
   { id:"importante", name:"Importante", color:"#FAB1A0", icon:"↑" },
   { id:"urgente",    name:"Urgente",    color:"#FF7675", icon:"⚡" },
 ];
+
 const COLUMNS = [
   { id:"pendente",  name:"Fila",          icon:"○", accent:"#636E72" },
   { id:"andamento", name:"Em Andamento",  icon:"◐", accent:"#0984E3" },
   { id:"concluido", name:"Concluídas",    icon:"●", accent:"#00B894" },
 ];
+
 const ROLE_LABELS = { admin:"🔑 Admin", manager:"👔 Gerente", member:"👤 Membro" };
 const PCOLORS = ["#6C5CE7","#00B894","#E17055","#D63031","#0984E3","#FDCB6E","#00CEC9","#A29BFE","#E84393","#FF9800"];
-const LOGO = "data:image/png;base64,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";
+const LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40">
+    <rect width="180" height="40" rx="8" fill="#0F1117"/>
+    <text x="8" y="27" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#15AABF">GlobalCad</text>
+  </svg>
+`);
 
-// ══════════════════════════════════════════════════════════════════
-// 🔧 UTILITÁRIOS
-// ══════════════════════════════════════════════════════════════════
 const uuid = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2);
 
 function calcDeadline(created, priority, sla) {
@@ -204,12 +344,11 @@ function getSlaInfo(task, sla) {
   const end = new Date(dl + "T00:00:00");
   const diff = Math.ceil((end - now) / 86400000);
   if (diff < 0) return { status:"late",  label:`Atrasada ${Math.abs(diff)}d`, color:"#FF4757", days:diff };
-  if (diff === 0) return { status:"today", label:"Vence hoje",             color:"#FFA502", days:0  };
-  if (diff <= 2) return { status:"soon",  label:`Vence em ${diff}d`,       color:"#FFA502", days:diff };
+  if (diff === 0) return { status:"today", label:"Vence hoje", color:"#FFA502", days:0 };
+  if (diff <= 2) return { status:"soon", label:`Vence em ${diff}d`, color:"#FFA502", days:diff };
   return { status:"ok", label:`${diff}d restantes`, color:"#00B894", days:diff };
 }
 
-// ── Componentes de UI reutilizáveis ──────────────────────────────
 function SlaTag({ task, sla, small }) {
   const info = getSlaInfo(task, sla);
   if (info.status === "none") return null;
@@ -226,8 +365,8 @@ function Av({ m, mbs, sz=28 }) {
   const x = mbs.find(a => a.id === m);
   if (!x) return null;
   return (
-    <div title={x.name} style={{ width:sz, height:sz, borderRadius:"50%", background:x.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:sz*0.4, fontWeight:700, flexShrink:0 }}>
-      {x.initials}
+    <div title={x.name} style={{ width:sz, height:sz, borderRadius:"50%", background:x.color || "#0984E3", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:sz*0.4, fontWeight:700, flexShrink:0 }}>
+      {x.initials || x.name?.slice(0,2) || "?"}
     </div>
   );
 }
@@ -248,26 +387,48 @@ function Pd({ pid }) {
   return <span title={p.name} style={{ fontSize:13, color:p.color, filter:"saturate(1.5)" }}>{p.icon}</span>;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 🔐 TELA DE LOGIN
-// ══════════════════════════════════════════════════════════════════
-function LoginScreen({ t }) {
+/* =========================
+   LOGIN / RESET
+========================= */
+function LoginScreen({ t, onLoggedIn }) {
   const [email, setEmail] = useState("");
-  const [pass,  setPass]  = useState("");
-  const [err,   setErr]   = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const iS = { padding:"11px 14px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:13, outline:"none", width:"100%", transition:"border-color .15s" };
+  const iS = {
+    padding:"11px 14px",
+    borderRadius:8,
+    border:"1px solid "+t.brd,
+    background:t.inp,
+    color:t.text,
+    fontSize:13,
+    outline:"none",
+    width:"100%"
+  };
 
   const login = async () => {
-    if (!email || !pass) { setErr("Preencha e-mail e senha."); return; }
-    setLoading(true); setErr("");
+    if (!email || !pass) {
+      setErr("Preencha e-mail e senha.");
+      return;
+    }
+
+    setLoading(true);
+    setErr("");
+
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-    if (error) { setErr(error.message); setLoading(false); }
+
+    if (error) {
+      setErr(error.message);
+      setLoading(false);
+      return;
+    }
+
+    onLoggedIn?.();
   };
 
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, fontFamily:"'DM Sans',sans-serif" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg }}>
       <div className="fade-in" style={{ background:t.card, borderRadius:16, padding:"32px 28px", width:"100%", maxWidth:380, boxShadow:"0 24px 48px rgba(0,0,0,0.2)" }}>
         <img src={LOGO} alt="GlobalCad" style={{ height:38, objectFit:"contain", marginBottom:8 }}/>
         <div style={{ fontSize:10, color:t.mut, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:28 }}>Gestão de Tarefas</div>
@@ -281,576 +442,18 @@ function LoginScreen({ t }) {
         )}
 
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" style={iS}
-            onFocus={e=>e.target.style.borderColor="#0984E3"} onBlur={e=>e.target.style.borderColor=t.brd}/>
-          <input type="password" value={pass} onChange={e=>setPass(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&login()} placeholder="Senha" style={iS}
-            onFocus={e=>e.target.style.borderColor="#0984E3"} onBlur={e=>e.target.style.borderColor=t.brd}/>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" style={iS} />
+          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} placeholder="Senha" style={iS} />
           <button onClick={login} disabled={loading}
-            style={{ padding:12, borderRadius:8, background: loading?"#0984E388":"#0984E3", color:"#fff", border:"none", fontSize:14, fontWeight:700, cursor: loading?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, transition:"background .15s" }}>
+            style={{ padding:12, borderRadius:8, background: loading?"#0984E388":"#0984E3", color:"#fff", border:"none", fontSize:14, fontWeight:700, cursor: loading?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
             {loading ? <><span className="spin">⟳</span> Entrando...</> : "Entrar →"}
           </button>
         </div>
-
-        <p style={{ color:t.mut, fontSize:11, marginTop:20, textAlign:"center" }}>
-          Acesso restrito a usuários autorizados.<br/>Solicite acesso ao administrador.
-        </p>
       </div>
     </div>
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 🃏 CARD DE TAREFA
-// ══════════════════════════════════════════════════════════════════
-function Card({ task, onEdit, cls, mbs, t, sla, taskTypes }) {
-  const p = PRIORITIES.find(x => x.id === task.priority);
-  const si = getSlaInfo(task, sla);
-  const borderColor = si.status === "late" ? "#FF4757" : (p?.color || "#ddd");
-  const tt = taskTypes.find(x => x.id === task.task_type);
-
-  return (
-    <div draggable onDragStart={e => e.dataTransfer.setData("tid", task.id)} onClick={() => onEdit(task)}
-      className="fade-in"
-      style={{ background:t.card, borderRadius:8, padding:"12px 14px", cursor:"grab", borderLeft:"3px solid "+borderColor,
-        boxShadow: si.status==="late" ? "0 0 0 1px #FF475733,0 1px 3px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.06)",
-        transition:"all .15s", display:"flex", flexDirection:"column", gap:8 }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.14)"; e.currentTarget.style.transform="translateY(-1px)"; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow= si.status==="late" ? "0 0 0 1px #FF475733,0 1px 3px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.06)"; e.currentTarget.style.transform="none"; }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
-        <Bg c={task.client_id || task.client} cls={cls}/><Pd pid={task.priority}/>
-      </div>
-      {tt && <div style={{ fontSize:10, color:t.mut, fontWeight:600 }}>{tt.icon} {tt.name}</div>}
-      <div style={{ fontSize:13, fontWeight:600, color:t.text, lineHeight:1.35 }}>{task.title}</div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ fontSize:10, color:t.mut, fontFamily:"monospace" }}>
-            {task.created_at ? task.created_at.slice(0,10) : task.created || ""}
-          </span>
-          {task.attachments?.length > 0 && <span style={{ fontSize:10, color:t.mut }}>📎{task.attachments.length}</span>}
-          <SlaTag task={task} sla={sla} small/>
-        </div>
-        <Av m={task.assignee_id || task.assignee} mbs={mbs} sz={22}/>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 📊 COLUNA KANBAN
-// ══════════════════════════════════════════════════════════════════
-function Col({ col, tasks, onEdit, onDrop, cls, mbs, t, sla, taskTypes }) {
-  const [ov, setOv] = useState(false);
-  return (
-    <div onDragOver={e=>{e.preventDefault();setOv(true);}} onDragLeave={()=>setOv(false)}
-      onDrop={e=>{e.preventDefault();setOv(false);onDrop(e.dataTransfer.getData("tid"),col.id);}}
-      style={{ flex:"1 1 260px", minWidth:260, maxWidth:340, display:"flex", flexDirection:"column",
-        background:ov?t.colH:t.colBg, borderRadius:12, transition:"background .2s" }}>
-      <div style={{ padding:"14px 14px 10px", display:"flex", alignItems:"center", gap:8, borderBottom:"2px solid "+col.accent+"44" }}>
-        <span style={{ fontSize:14, color:col.accent }}>{col.icon}</span>
-        <span style={{ fontWeight:800, fontSize:12, color:t.text, letterSpacing:"0.03em", textTransform:"uppercase" }}>{col.name}</span>
-        <span style={{ marginLeft:"auto", background:col.accent+"22", color:col.accent, fontSize:11, fontWeight:800, padding:"2px 8px", borderRadius:10 }}>{tasks.length}</span>
-      </div>
-      <div style={{ padding:8, display:"flex", flexDirection:"column", gap:8, flex:1, overflowY:"auto", maxHeight:"calc(100vh - 240px)" }}>
-        {tasks.map(tk => <Card key={tk.id} task={tk} onEdit={onEdit} cls={cls} mbs={mbs} t={t} sla={sla} taskTypes={taskTypes}/>)}
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 📝 MODAL DE TAREFA (criar / editar)
-// ══════════════════════════════════════════════════════════════════
-function TaskModal({ task, onSave, onDel, onClose, cls, mbs, t, onNC, sla, taskTypes, currentUser }) {
-  const isNew = !task.id;
-  const today = new Date().toISOString().slice(0,10);
-
-  const [f, sF] = useState({
-    title: "", description: "", column: "pendente",
-    client_id: cls[0]?.id || "", priority: "media",
-    assignee_id: currentUser?.id || "",
-    requester_id: currentUser?.id || "",
-    task_type: "", deadline: calcDeadline(today, "media", sla),
-    ...task,
-    // normaliza campos legados
-    client_id: task.client_id || task.client || cls[0]?.id || "",
-    assignee_id: task.assignee_id || task.assignee || currentUser?.id || "",
-    requester_id: task.requester_id || task.requester || currentUser?.id || "",
-    task_type: task.task_type || task.taskType || "",
-  });
-
-  const [history, setHistory]     = useState([]);
-  const [snc, setSnc]             = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [nc, setNc]               = useState({ name:"", color: PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
-  const fileRef = useRef(null);
-
-  useEffect(() => {
-    if (task.id) {
-      sb.from("task_history").select("*")
-        .eq("task_id", task.id).order("created_at", { ascending: false }).limit(10)
-        .then(({ data }) => setHistory(data || []));
-    }
-  }, [task.id]);
-
-  const set = (k, v) => sF(p => {
-    const nf = { ...p, [k]: v };
-    if ((k==="priority" || k==="created_at") && nf.created_at)
-      nf.deadline = calcDeadline(nf.created_at?.slice(0,10), nf.priority, sla);
-    return nf;
-  });
-
-  const handleSave = async () => {
-    if (!f.title.trim()) return;
-    setSaving(true);
-    await onSave(f);
-    setSaving(false);
-    onClose();
-  };
-
-  const addClient = () => {
-    if (!nc.name.trim()) return;
-    const c = { id: nc.name.toLowerCase().replace(/\s+/g,"_"), name:nc.name.trim(), color:nc.color };
-    onNC(c);
-    set("client_id", c.id);
-    setSnc(false);
-  };
-
-  const iS = { padding:"10px 12px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:13, outline:"none", fontFamily:"inherit", width:"100%", boxSizing:"border-box", transition:"border-color .15s" };
-  const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer", fontFamily:"inherit" };
-  const fieldLabels = { column:"Status", priority:"Prioridade", assignee_id:"Responsável", deadline:"Prazo" };
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)", padding:16 }}>
-      <div className="fade-in" style={{ background:t.card, borderRadius:16, padding:24, width:"100%", maxWidth:500, maxHeight:"92vh", overflowY:"auto", boxShadow:"0 24px 48px rgba(0,0,0,0.25)" }}>
-        <h3 style={{ margin:"0 0 18px", fontSize:16, fontWeight:800, color:t.text }}>{isNew ? "Nova Tarefa" : "Editar Tarefa"}</h3>
-
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {/* Título */}
-          <input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Título da tarefa" style={iS}
-            onFocus={e=>e.target.style.borderColor="#0984E3"} onBlur={e=>e.target.style.borderColor=t.brd}/>
-
-          {/* Descrição */}
-          <div>
-            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Descrição</label>
-            <textarea value={f.description||""} onChange={e=>set("description",e.target.value)}
-              placeholder="Descreva a tarefa..." rows={3}
-              style={{...iS, resize:"vertical", minHeight:60}}/>
-          </div>
-
-          {/* Cliente */}
-          <div>
-            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Cliente</label>
-            <div style={{ display:"flex", gap:8 }}>
-              <select value={f.client_id||""} onChange={e=>set("client_id",e.target.value)} style={{...iS,flex:1}}>
-                <option value="">Selecione...</option>
-                {cls.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button onClick={()=>setSnc(!snc)} style={{...bS, background:t.colBg, color:t.mut, fontSize:18, padding:"6px 12px", border:"1px solid "+t.brd}} title="Novo cliente">+</button>
-            </div>
-            {snc && (
-              <div style={{ marginTop:8, padding:12, background:t.colBg, borderRadius:8, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <input value={nc.name} onChange={e=>setNc(p=>({...p,name:e.target.value}))} placeholder="Nome do cliente" style={{...iS,flex:"1 1 120px"}}/>
-                <input type="color" value={nc.color} onChange={e=>setNc(p=>({...p,color:e.target.value}))} style={{ width:36, height:36, borderRadius:8, border:"none", cursor:"pointer", padding:0 }}/>
-                <button onClick={addClient} style={{...bS, background:"#0984E3", color:"#fff", fontWeight:700}}>Adicionar</button>
-              </div>
-            )}
-          </div>
-
-          {/* Prioridade + Solicitante */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <div>
-              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Prioridade</label>
-              <select value={f.priority} onChange={e=>set("priority",e.target.value)} style={iS}>
-                {PRIORITIES.map(p=><option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Solicitante</label>
-              <select value={f.requester_id||""} onChange={e=>set("requester_id",e.target.value)} style={iS}>
-                <option value="">Selecione...</option>
-                {mbs.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Responsável + Prazo */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <div>
-              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Responsável</label>
-              <select value={f.assignee_id||""} onChange={e=>set("assignee_id",e.target.value)} style={iS}>
-                <option value="">Selecione...</option>
-                {mbs.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Prazo (SLA)</label>
-              <input type="date" value={f.deadline||""} onChange={e=>sF(p=>({...p,deadline:e.target.value}))} style={iS}/>
-              {f.deadline && <div style={{ marginTop:4 }}><SlaTag task={f} sla={sla}/></div>}
-            </div>
-          </div>
-
-          {/* Tipo de tarefa */}
-          <div>
-            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6, display:"block" }}>Tipo de Tarefa</label>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-              {taskTypes.map(tt => (
-                <button key={tt.id} onClick={()=>set("task_type", f.task_type===tt.id ? "" : tt.id)}
-                  style={{ padding:"7px 12px", borderRadius:8, border:"2px solid "+(f.task_type===tt.id?"#0984E3":t.brd),
-                    background:f.task_type===tt.id?"#0984E322":t.inp, color:f.task_type===tt.id?"#0984E3":t.text,
-                    fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
-                    display:"flex", alignItems:"center", gap:5, transition:"all .15s" }}>
-                  <span style={{fontSize:14}}>{tt.icon}</span> {tt.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Status */}
-          <div>
-            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"block" }}>Status</label>
-            <select value={f.column} onChange={e=>set("column",e.target.value)} style={iS}>
-              {COLUMNS.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-            </select>
-          </div>
-
-          {/* Histórico */}
-          {history.length > 0 && (
-            <div>
-              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6, display:"block" }}>📋 Histórico de alterações</label>
-              <div style={{ display:"flex", flexDirection:"column", gap:3, maxHeight:130, overflowY:"auto" }}>
-                {history.map(h => (
-                  <div key={h.id} style={{ fontSize:11, color:t.mut, display:"flex", gap:8, padding:"5px 8px", background:t.colBg, borderRadius:6, alignItems:"center" }}>
-                    <span style={{ color:t.text, fontWeight:600, flexShrink:0 }}>{fieldLabels[h.field] || h.field}</span>
-                    <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.old_value||"—"} → <strong style={{color:t.text}}>{h.new_value||"—"}</strong></span>
-                    <span style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:10, flexShrink:0 }}>
-                      {h.created_at ? new Date(h.created_at).toLocaleDateString("pt-BR") : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Ações */}
-        <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end", flexWrap:"wrap" }}>
-          {!isNew && <button onClick={()=>{onDel(task.id);onClose();}} style={{...bS,background:"#FF767533",color:"#D63031"}}>Excluir</button>}
-          <button onClick={onClose} style={{...bS,background:t.colBg,color:t.mut}}>Cancelar</button>
-          <button onClick={handleSave} disabled={saving}
-            style={{...bS,background:saving?"#0984E388":"#0984E3",color:"#fff",fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
-            {saving ? <><span className="spin">⟳</span> Salvando...</> : "Salvar"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-// ⚙️  MODAL DE CONFIGURAÇÕES
-// ══════════════════════════════════════════════════════════════════
-function SettingsModal({ onClose, cls, setCls, mbs, setMbs, taskTypes, setTaskTypes, t, currentUser }) {
-  const isAdmin = currentUser?.role === "admin";
-  const isManager = currentUser?.role === "manager" || isAdmin;
-  const tabs = [
-    { id:"clients",   label:"🏢 Clientes",         show: true },
-    { id:"members",   label:"👤 Equipe",            show: true },
-    { id:"tasktypes", label:"📋 Tipos de Tarefa",   show: true },
-    { id:"users",     label:"🔐 Usuários",          show: isAdmin },
-  ].filter(tb => tb.show);
-
-  const [tab,    setTab]    = useState("clients");
-  const [editCl, setEditCl] = useState(null);
-  const [newCl,  setNewCl]  = useState({ name:"", color: PCOLORS[0] });
-  const [editMb, setEditMb] = useState(null);
-  const [newMb,  setNewMb]  = useState({ name:"", initials:"", color: PCOLORS[1] });
-  const [editTt, setEditTt] = useState(null);
-  const [newTt,  setNewTt]  = useState({ name:"", icon:"📋" });
-  const [invEmail, setInvEmail] = useState("");
-  const [invMsg,   setInvMsg]   = useState("");
-
-  const iS = { padding:"8px 10px", borderRadius:6, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:12, outline:"none", fontFamily:"inherit", width:"100%", boxSizing:"border-box" };
-  const bS = (bg, cl) => ({ padding:"6px 14px", borderRadius:6, border:"none", fontSize:12, cursor:"pointer", fontFamily:"inherit", background:bg, color:cl, fontWeight:700 });
-  const Row = ({ children }) => <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:t.colBg, borderRadius:8, marginBottom:6 }}>{children}</div>;
-
-  // Clients
-  const saveCl = async (item) => {
-    if (!item.name.trim()) return;
-    const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
-    const payload = { id, name: item.name.trim(), color: item.color };
-    await sb.from("clients").upsert(payload);
-    if (item._new) setCls(p => [...p, payload]);
-    else setCls(p => p.map(x => x.id === item.id ? payload : x));
-    setEditCl(null);
-    setNewCl({ name:"", color: PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
-  };
-  const delCl = async (id) => {
-    if (!window.confirm("Excluir este cliente?")) return;
-    await sb.from("clients").delete().eq("id", id);
-    setCls(p => p.filter(x => x.id !== id));
-  };
-
-  // Members
-  const saveMb = async (item) => {
-    if (!item.name.trim()) return;
-    const payload = { id: item.id, name: item.name.trim(), initials: (item.initials||"").toUpperCase().slice(0,2), color: item.color, role: item.role || "member" };
-    await sb.from("profiles").update(payload).eq("id", item.id);
-    setMbs(p => p.map(x => x.id === item.id ? { ...x, ...payload } : x));
-    setEditMb(null);
-  };
-
-  // Task types
-  const saveTt = async (item) => {
-    if (!item.name.trim()) return;
-    const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
-    const payload = { id, name: item.name.trim(), icon: item.icon || "📋" };
-    await sb.from("task_types").upsert(payload);
-    if (item._new) setTaskTypes(p => [...p, payload]);
-    else setTaskTypes(p => p.map(x => x.id === item.id ? payload : x));
-    setEditTt(null);
-    setNewTt({ name:"", icon:"📋" });
-  };
-  const delTt = async (id) => {
-    if (!window.confirm("Excluir este tipo de tarefa?")) return;
-    await sb.from("task_types").delete().eq("id", id);
-    setTaskTypes(p => p.filter(x => x.id !== id));
-  };
-
-  const updateRole = async (userId, role) => {
-    await sb.from("profiles").update({ role }).eq("id", userId);
-    setMbs(p => p.map(x => x.id === userId ? { ...x, role } : x));
-  };
-
-  const sendInvite = async () => {
-    if (!invEmail.trim()) return;
-    setInvMsg("⏳ Enviando convite...");
-    // Na prática, use a Admin API do Supabase via Edge Function
-    // Por ora, apenas exibe instrução
-    setInvMsg(`✅ Para convidar ${invEmail}, use o Dashboard do Supabase: Authentication → Users → Invite user`);
-    setInvEmail("");
-  };
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)", padding:16 }}>
-      <div className="fade-in" style={{ background:t.card, borderRadius:16, width:"100%", maxWidth:560, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 48px rgba(0,0,0,0.25)" }}>
-        <div style={{ padding:"18px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:t.text }}>⚙️ Configurações</div>
-            <div style={{ fontSize:11, color:t.mut, marginTop:2 }}>Gerencie clientes, equipe e tipos de tarefa</div>
-          </div>
-          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:t.mut }}>×</button>
-        </div>
-
-        <div style={{ display:"flex", gap:0, padding:"14px 24px 0", flexShrink:0, borderBottom:"1px solid "+t.brd, overflowX:"auto" }}>
-          {tabs.map(tb => (
-            <button key={tb.id} onClick={() => setTab(tb.id)} style={{
-              padding:"7px 12px", borderRadius:"8px 8px 0 0", border:"none", cursor:"pointer", fontFamily:"inherit",
-              fontSize:12, fontWeight:700, whiteSpace:"nowrap",
-              background: tab===tb.id ? t.bg : "transparent",
-              color: tab===tb.id ? t.text : t.mut,
-              borderBottom: tab===tb.id ? "2px solid #0984E3" : "2px solid transparent",
-              marginBottom:-1
-            }}>{tb.label}</button>
-          ))}
-        </div>
-
-        <div style={{ flex:1, overflowY:"auto", padding:"16px 24px 24px" }}>
-
-          {/* Clientes */}
-          {tab==="clients" && <div>
-            <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>Clientes cadastrados ({cls.length})</div>
-            {cls.map(c => (
-              <Row key={c.id}>
-                {editCl?.id===c.id ? (
-                  <>
-                    <input value={editCl.name} onChange={e=>setEditCl(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome"/>
-                    <input type="color" value={editCl.color} onChange={e=>setEditCl(p=>({...p,color:e.target.value}))} style={{width:32,height:32,borderRadius:6,border:"none",cursor:"pointer",padding:0,flexShrink:0}}/>
-                    <button onClick={()=>saveCl(editCl)} style={bS("#0984E3","#fff")}>✓</button>
-                    <button onClick={()=>setEditCl(null)} style={bS(t.colBg,t.mut)}>✕</button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{width:14,height:14,borderRadius:3,background:c.color,flexShrink:0}}/>
-                    <span style={{flex:1,fontSize:13,fontWeight:600,color:t.text}}>{c.name}</span>
-                    <button onClick={()=>setEditCl({...c})} style={bS(t.colBg,t.mut)}>✏️</button>
-                    {isManager && <button onClick={()=>delCl(c.id)} style={bS("#FF767522","#D63031")}>🗑</button>}
-                  </>
-                )}
-              </Row>
-            ))}
-            {isManager && <div style={{ marginTop:14, padding:"12px 10px", background:t.colBg, borderRadius:8, border:"1px dashed "+t.brd }}>
-              <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.06em" }}>+ Novo cliente</div>
-              <div style={{ display:"flex", gap:8 }}>
-                <input value={newCl.name} onChange={e=>setNewCl(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveCl({...newCl,_new:true})} style={{...iS,flex:1}} placeholder="Nome do cliente"/>
-                <input type="color" value={newCl.color} onChange={e=>setNewCl(p=>({...p,color:e.target.value}))} style={{width:36,height:36,borderRadius:6,border:"none",cursor:"pointer",padding:0,flexShrink:0}}/>
-                <button onClick={()=>saveCl({...newCl,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
-              </div>
-            </div>}
-          </div>}
-
-          {/* Equipe */}
-          {tab==="members" && <div>
-            <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>Membros da equipe ({mbs.length})</div>
-            {mbs.map(m => (
-              <Row key={m.id}>
-                {editMb?.id===m.id ? (
-                  <>
-                    <input value={editMb.name} onChange={e=>setEditMb(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome"/>
-                    <input value={editMb.initials} onChange={e=>setEditMb(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))} style={{...iS,width:48}} placeholder="AB"/>
-                    <input type="color" value={editMb.color} onChange={e=>setEditMb(p=>({...p,color:e.target.value}))} style={{width:32,height:32,borderRadius:6,border:"none",cursor:"pointer",padding:0,flexShrink:0}}/>
-                    <button onClick={()=>saveMb(editMb)} style={bS("#0984E3","#fff")}>✓</button>
-                    <button onClick={()=>setEditMb(null)} style={bS(t.colBg,t.mut)}>✕</button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{width:30,height:30,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>{m.initials||m.name?.slice(0,2)}</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:600,color:t.text}}>{m.name}</div>
-                      <div style={{fontSize:10,color:t.mut}}>{m.email} · {ROLE_LABELS[m.role]||"Membro"}</div>
-                    </div>
-                    {(m.id===currentUser?.id || isAdmin) && <button onClick={()=>setEditMb({...m})} style={bS(t.colBg,t.mut)}>✏️</button>}
-                  </>
-                )}
-              </Row>
-            ))}
-          </div>}
-
-          {/* Tipos de tarefa */}
-          {tab==="tasktypes" && <div>
-            <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>Tipos de tarefa ({taskTypes.length})</div>
-            {taskTypes.map(tt => (
-              <Row key={tt.id}>
-                {editTt?.id===tt.id ? (
-                  <>
-                    <input value={editTt.icon} onChange={e=>setEditTt(p=>({...p,icon:e.target.value}))} style={{...iS,width:48,textAlign:"center",fontSize:18}} placeholder="🔧"/>
-                    <input value={editTt.name} onChange={e=>setEditTt(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome do tipo"/>
-                    <button onClick={()=>saveTt(editTt)} style={bS("#0984E3","#fff")}>✓</button>
-                    <button onClick={()=>setEditTt(null)} style={bS(t.colBg,t.mut)}>✕</button>
-                  </>
-                ) : (
-                  <>
-                    <span style={{fontSize:18,flexShrink:0}}>{tt.icon}</span>
-                    <span style={{flex:1,fontSize:13,fontWeight:600,color:t.text}}>{tt.name}</span>
-                    {isManager && <><button onClick={()=>setEditTt({...tt})} style={bS(t.colBg,t.mut)}>✏️</button>
-                    <button onClick={()=>delTt(tt.id)} style={bS("#FF767522","#D63031")}>🗑</button></>}
-                  </>
-                )}
-              </Row>
-            ))}
-            {isManager && <div style={{ marginTop:14, padding:"12px 10px", background:t.colBg, borderRadius:8, border:"1px dashed "+t.brd }}>
-              <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.06em" }}>+ Novo tipo</div>
-              <div style={{ display:"flex", gap:8 }}>
-                <input value={newTt.icon} onChange={e=>setNewTt(p=>({...p,icon:e.target.value}))} style={{...iS,width:52,textAlign:"center",fontSize:18}} placeholder="🔧"/>
-                <input value={newTt.name} onChange={e=>setNewTt(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveTt({...newTt,_new:true})} style={{...iS,flex:1}} placeholder="Nome do tipo"/>
-                <button onClick={()=>saveTt({...newTt,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
-              </div>
-            </div>}
-          </div>}
-
-          {/* Usuários (apenas admin) */}
-          {tab==="users" && isAdmin && <div>
-            <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>
-              Controle de acesso ({mbs.length} usuários)
-            </div>
-            {mbs.map(m => (
-              <Row key={m.id}>
-                <div style={{width:30,height:30,borderRadius:"50%",background:m.color||"#0984E3",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>{m.initials||m.name?.slice(0,2)}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:t.text}}>{m.name}</div>
-                  <div style={{fontSize:10,color:t.mut}}>{m.email}</div>
-                </div>
-                <select value={m.role||"member"} onChange={e=>updateRole(m.id,e.target.value)}
-                  style={{...iS,width:"auto",padding:"4px 8px",flex:"0 0 auto"}}>
-                  <option value="member">👤 Membro</option>
-                  <option value="manager">👔 Gerente</option>
-                  <option value="admin">🔑 Admin</option>
-                </select>
-              </Row>
-            ))}
-            <div style={{ marginTop:14, padding:"14px", background:t.colBg, borderRadius:8, border:"1px dashed "+t.brd }}>
-              <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.06em" }}>✉️ Convidar novo usuário</div>
-              <div style={{ display:"flex", gap:8 }}>
-                <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="email@exemplo.com" style={{...iS,flex:1}}/>
-                <button onClick={sendInvite} style={{...bS("#0984E3","#fff"),whiteSpace:"nowrap"}}>Convidar</button>
-              </div>
-              {invMsg && <div style={{ marginTop:8, fontSize:12, color:t.mut, padding:"8px 10px", background:t.inp, borderRadius:6 }}>{invMsg}</div>}
-              <p style={{ fontSize:11, color:t.mut, marginTop:8 }}>
-                💡 Para convites automáticos, configure a Edge Function <code>send-email</code> com permissão de Admin API.
-              </p>
-            </div>
-          </div>}
-
-        </div>
-
-        <div style={{ padding:"12px 24px", borderTop:"1px solid "+t.brd, display:"flex", justifyContent:"flex-end", flexShrink:0 }}>
-          <button onClick={onClose} style={bS("#0984E3","#fff")}>Fechar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 🔍 FILTROS
-// ══════════════════════════════════════════════════════════════════
-function Filters({ filters, setF, cls, mbs, t, tasks, sla }) {
-  const s = { padding:"6px 10px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:12, outline:"none", fontFamily:"inherit", minWidth:0, flex:"1 1 100px" };
-  const usedCls = cls.filter(c => tasks.some(tk => (tk.client_id||tk.client)===c.id));
-  const usedPri = PRIORITIES.filter(p => tasks.some(tk => tk.priority===p.id));
-  const usedMbs = mbs.filter(m => tasks.some(tk => (tk.assignee_id||tk.assignee)===m.id));
-  const activeCols = filters.cols || COLUMNS.map(c=>c.id);
-
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", whiteSpace:"nowrap" }}>Filtros:</span>
-        <select value={filters.client} onChange={e=>setF(p=>({...p,client:e.target.value}))} style={s}>
-          <option value="">Todos clientes</option>
-          {usedCls.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={filters.priority} onChange={e=>setF(p=>({...p,priority:e.target.value}))} style={s}>
-          <option value="">Todas prioridades</option>
-          {usedPri.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select value={filters.assignee} onChange={e=>setF(p=>({...p,assignee:e.target.value}))} style={s}>
-          <option value="">Todos responsáveis</option>
-          {usedMbs.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        <select value={filters.sla||""} onChange={e=>setF(p=>({...p,sla:e.target.value}))} style={{...s,flex:"1 1 110px"}}>
-          <option value="">SLA: Todos</option>
-          <option value="ok">🟢 No prazo</option>
-          <option value="soon">🟡 Vence em breve</option>
-          <option value="late">🔴 Atrasadas</option>
-        </select>
-        <input value={filters.search} onChange={e=>setF(p=>({...p,search:e.target.value}))} placeholder="Buscar..." style={{...s,flex:"1 1 140px"}}/>
-      </div>
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em", whiteSpace:"nowrap" }}>Colunas:</span>
-        {COLUMNS.map(col => {
-          const active = activeCols.includes(col.id);
-          const count = tasks.filter(tk=>tk.column===col.id).length;
-          return (
-            <label key={col.id} onClick={()=>setF(p=>{const cur=p.cols||COLUMNS.map(c=>c.id);return {...p,cols:cur.includes(col.id)?cur.filter(x=>x!==col.id):[...cur,col.id]};})}
-              style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer", padding:"4px 10px", borderRadius:6,
-                background:active?col.accent+"22":"transparent", border:"1px solid "+(active?col.accent+"55":t.brd),
-                transition:"all .15s", userSelect:"none" }}>
-              <span style={{ width:14, height:14, borderRadius:3, border:"2px solid "+(active?col.accent:t.mut),
-                background:active?col.accent:"transparent", display:"flex", alignItems:"center",
-                justifyContent:"center", fontSize:10, color:"#fff", transition:"all .15s" }}>{active?"✓":""}</span>
-              <span style={{ fontSize:11, fontWeight:600, color:active?col.accent:t.mut }}>{col.icon} {col.name}</span>
-              <span style={{ fontSize:10, color:t.mut }}>({count})</span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 🏠 APP PRINCIPAL
-// ══════════════════════════════════════════════════════════════════
 function ResetPasswordScreen({ t, onDone }) {
   const [pass1, setPass1] = useState("");
   const [pass2, setPass2] = useState("");
@@ -859,14 +462,14 @@ function ResetPasswordScreen({ t, onDone }) {
   const [loading, setLoading] = useState(false);
 
   const iS = {
-    padding: "11px 14px",
-    borderRadius: 8,
-    border: "1px solid " + t.brd,
-    background: t.inp,
-    color: t.text,
-    fontSize: 13,
-    outline: "none",
-    width: "100%"
+    padding:"11px 14px",
+    borderRadius:8,
+    border:"1px solid " + t.brd,
+    background:t.inp,
+    color:t.text,
+    fontSize:13,
+    outline:"none",
+    width:"100%"
   };
 
   const save = async () => {
@@ -877,12 +480,10 @@ function ResetPasswordScreen({ t, onDone }) {
       setErr("Preencha a nova senha e a confirmação.");
       return;
     }
-
     if (pass1 !== pass2) {
       setErr("As senhas não coincidem.");
       return;
     }
-
     if (pass1.length < 6) {
       setErr("Use pelo menos 6 caracteres.");
       return;
@@ -902,27 +503,17 @@ function ResetPasswordScreen({ t, onDone }) {
   };
 
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, fontFamily:"'DM Sans',sans-serif" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg }}>
       <div className="fade-in" style={{ background:t.card, borderRadius:16, padding:"32px 28px", width:"100%", maxWidth:380, boxShadow:"0 24px 48px rgba(0,0,0,0.2)" }}>
         <img src={LOGO} alt="GlobalCad" style={{ height:38, objectFit:"contain", marginBottom:8 }}/>
         <div style={{ fontSize:10, color:t.mut, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:28 }}>Redefinir senha</div>
 
-        {err && (
-          <div style={{ color:"#FF4757", fontSize:12, marginBottom:14, padding:"10px 12px", background:"#FF475711", borderRadius:8, border:"1px solid #FF475733" }}>
-            ⚠️ {err}
-          </div>
-        )}
-
-        {ok && (
-          <div style={{ color:"#00B894", fontSize:12, marginBottom:14, padding:"10px 12px", background:"#00B89411", borderRadius:8, border:"1px solid #00B89433" }}>
-            ✅ {ok}
-          </div>
-        )}
+        {err && <div style={{ color:"#FF4757", fontSize:12, marginBottom:14, padding:"10px 12px", background:"#FF475711", borderRadius:8, border:"1px solid #FF475733" }}>⚠️ {err}</div>}
+        {ok && <div style={{ color:"#00B894", fontSize:12, marginBottom:14, padding:"10px 12px", background:"#00B89411", borderRadius:8, border:"1px solid #00B89433" }}>✅ {ok}</div>}
 
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <input type="password" value={pass1} onChange={e=>setPass1(e.target.value)} placeholder="Nova senha" style={iS} />
-          <input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} placeholder="Confirmar nova senha" style={iS}
-            onKeyDown={e=>e.key==="Enter"&&save()} />
+          <input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()} placeholder="Confirmar nova senha" style={iS} />
           <button onClick={save} disabled={loading}
             style={{ padding:12, borderRadius:8, background: loading?"#0984E388":"#0984E3", color:"#fff", border:"none", fontSize:14, fontWeight:700, cursor: loading?"not-allowed":"pointer" }}>
             {loading ? "Salvando..." : "Salvar nova senha"}
@@ -932,55 +523,697 @@ function ResetPasswordScreen({ t, onDone }) {
     </div>
   );
 }
-  function App() {
+
+/* =========================
+   CARD / COLUNA
+========================= */
+function Card({ task, onEdit, cls, mbs, t, sla, taskTypes }) {
+  const p = PRIORITIES.find(x => x.id === task.priority);
+  const si = getSlaInfo(task, sla);
+  const borderColor = si.status === "late" ? "#FF4757" : (p?.color || "#ddd");
+  const tt = taskTypes.find(x => x.id === task.task_type);
+
+  return (
+    <div
+      draggable
+      onDragStart={e => e.dataTransfer.setData("tid", task.id)}
+      onClick={() => onEdit(task)}
+      className="fade-in"
+      style={{
+        background:t.card,
+        borderRadius:8,
+        padding:"12px 14px",
+        cursor:"grab",
+        borderLeft:"3px solid "+borderColor,
+        boxShadow: si.status==="late" ? "0 0 0 1px #FF475733,0 1px 3px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.06)",
+        transition:"all .15s",
+        display:"flex",
+        flexDirection:"column",
+        gap:8
+      }}
+    >
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
+        <Bg c={task.client_id || task.client} cls={cls}/>
+        <Pd pid={task.priority}/>
+      </div>
+
+      {tt && <div style={{ fontSize:10, color:t.mut, fontWeight:600 }}>{tt.icon} {tt.name}</div>}
+      <div style={{ fontSize:13, fontWeight:600, color:t.text, lineHeight:1.35 }}>{task.title}</div>
+
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:10, color:t.mut, fontFamily:"monospace" }}>
+            {task.created_at ? String(task.created_at).slice(0,10) : ""}
+          </span>
+          {task.attachments?.length > 0 && <span style={{ fontSize:10, color:t.mut }}>📎{task.attachments.length}</span>}
+          <SlaTag task={task} sla={sla} small />
+        </div>
+        <Av m={task.assignee_id || task.assignee} mbs={mbs} sz={22}/>
+      </div>
+    </div>
+  );
+}
+
+function Col({ col, tasks, onEdit, onDrop, cls, mbs, t, sla, taskTypes }) {
+  const [ov, setOv] = useState(false);
+
+  return (
+    <div
+      onDragOver={e=>{e.preventDefault(); setOv(true);}}
+      onDragLeave={()=>setOv(false)}
+      onDrop={e=>{e.preventDefault(); setOv(false); onDrop(e.dataTransfer.getData("tid"), col.id);}}
+      style={{
+        flex:"1 1 260px",
+        minWidth:260,
+        maxWidth:340,
+        display:"flex",
+        flexDirection:"column",
+        background:ov?t.colH:t.colBg,
+        borderRadius:12,
+        transition:"background .2s"
+      }}
+    >
+      <div style={{ padding:"14px 14px 10px", display:"flex", alignItems:"center", gap:8, borderBottom:"2px solid "+col.accent+"44" }}>
+        <span style={{ fontSize:14, color:col.accent }}>{col.icon}</span>
+        <span style={{ fontWeight:800, fontSize:12, color:t.text, letterSpacing:"0.03em", textTransform:"uppercase" }}>{col.name}</span>
+        <span style={{ marginLeft:"auto", background:col.accent+"22", color:col.accent, fontSize:11, fontWeight:800, padding:"2px 8px", borderRadius:10 }}>{tasks.length}</span>
+      </div>
+
+      <div style={{ padding:8, display:"flex", flexDirection:"column", gap:8, flex:1, overflowY:"auto", maxHeight:"calc(100vh - 240px)" }}>
+        {tasks.map(tk => (
+          <Card key={tk.id} task={tk} onEdit={onEdit} cls={cls} mbs={mbs} t={t} sla={sla} taskTypes={taskTypes}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   MODAL TAREFA
+========================= */
+function TaskModal({ task, onSave, onDel, onClose, cls, mbs, t, onNC, sla, taskTypes, currentUser }) {
+  const isNew = !task.id;
+  const today = new Date().toISOString().slice(0,10);
+
+  const [f, sF] = useState({
+    title: "",
+    description: "",
+    column: "pendente",
+    client_id: cls[0]?.id || "",
+    priority: "media",
+    assignee_id: currentUser?.id || "",
+    requester_id: currentUser?.id || "",
+    task_type: "",
+    deadline: calcDeadline(today, "media", sla),
+    ...task,
+    client_id: task.client_id || task.client || cls[0]?.id || "",
+    assignee_id: task.assignee_id || task.assignee || currentUser?.id || "",
+    requester_id: task.requester_id || task.requester || currentUser?.id || "",
+    task_type: task.task_type || task.taskType || "",
+  });
+
+  const [history, setHistory] = useState([]);
+  const [snc, setSnc] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [nc, setNc] = useState({ name:"", color: PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
+
+  useEffect(() => {
+    if (task.id) {
+      sb.from("task_history").select("*")
+        .eq("task_id", task.id)
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .then(({ data }) => setHistory(data || []));
+    }
+  }, [task.id]);
+
+  const set = (k, v) => sF(p => {
+    const nf = { ...p, [k]: v };
+    if ((k==="priority" || k==="created_at") && nf.created_at) {
+      nf.deadline = calcDeadline(String(nf.created_at).slice(0,10), nf.priority, sla);
+    }
+    return nf;
+  });
+
+  const handleSave = async () => {
+    if (!f.title.trim()) return;
+    setSaving(true);
+    await onSave(f);
+    setSaving(false);
+    onClose();
+  };
+
+  const addClient = () => {
+    if (!nc.name.trim()) return;
+    const c = { id: nc.name.toLowerCase().replace(/\s+/g,"_"), name:nc.name.trim(), color:nc.color };
+    onNC(c);
+    set("client_id", c.id);
+    setSnc(false);
+  };
+
+  const iS = { padding:"10px 12px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box" };
+  const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer", fontFamily:"inherit" };
+  const fieldLabels = { column:"Status", priority:"Prioridade", assignee_id:"Responsável", deadline:"Prazo" };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)", padding:16 }}>
+      <div className="fade-in" style={{ background:t.card, borderRadius:16, padding:24, width:"100%", maxWidth:500, maxHeight:"92vh", overflowY:"auto", boxShadow:"0 24px 48px rgba(0,0,0,0.25)" }}>
+        <h3 style={{ margin:"0 0 18px", fontSize:16, fontWeight:800, color:t.text }}>{isNew ? "Nova Tarefa" : "Editar Tarefa"}</h3>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Título da tarefa" style={iS} />
+          <textarea value={f.description||""} onChange={e=>set("description",e.target.value)} placeholder="Descreva a tarefa..." rows={3} style={{...iS, resize:"vertical", minHeight:60}} />
+
+          <div>
+            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:4, display:"block" }}>Cliente</label>
+            <div style={{ display:"flex", gap:8 }}>
+              <select value={f.client_id||""} onChange={e=>set("client_id",e.target.value)} style={{...iS,flex:1}}>
+                <option value="">Selecione...</option>
+                {cls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button onClick={()=>setSnc(!snc)} style={{...bS, background:t.colBg, color:t.mut, fontSize:18, padding:"6px 12px", border:"1px solid "+t.brd}}>+</button>
+            </div>
+
+            {snc && (
+              <div style={{ marginTop:8, padding:12, background:t.colBg, borderRadius:8, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <input value={nc.name} onChange={e=>setNc(p=>({...p,name:e.target.value}))} placeholder="Nome do cliente" style={{...iS,flex:"1 1 120px"}}/>
+                <input type="color" value={nc.color} onChange={e=>setNc(p=>({...p,color:e.target.value}))} style={{ width:36, height:36, borderRadius:8, border:"none", padding:0 }}/>
+                <button onClick={addClient} style={{...bS, background:"#0984E3", color:"#fff", fontWeight:700}}>Adicionar</button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:4, display:"block" }}>Prioridade</label>
+              <select value={f.priority} onChange={e=>set("priority",e.target.value)} style={iS}>
+                {PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:4, display:"block" }}>Solicitante</label>
+              <select value={f.requester_id||""} onChange={e=>set("requester_id",e.target.value)} style={iS}>
+                <option value="">Selecione...</option>
+                {mbs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:4, display:"block" }}>Responsável</label>
+              <select value={f.assignee_id||""} onChange={e=>set("assignee_id",e.target.value)} style={iS}>
+                <option value="">Selecione...</option>
+                {mbs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:4, display:"block" }}>Prazo (SLA)</label>
+              <input type="date" value={f.deadline||""} onChange={e=>sF(p=>({...p,deadline:e.target.value}))} style={iS}/>
+              {f.deadline && <div style={{ marginTop:4 }}><SlaTag task={f} sla={sla} /></div>}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:6, display:"block" }}>Tipo de Tarefa</label>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {taskTypes.map(tt => (
+                <button
+                  key={tt.id}
+                  onClick={()=>set("task_type", f.task_type===tt.id ? "" : tt.id)}
+                  style={{
+                    padding:"7px 12px",
+                    borderRadius:8,
+                    border:"2px solid "+(f.task_type===tt.id?"#0984E3":t.brd),
+                    background:f.task_type===tt.id?"#0984E322":t.inp,
+                    color:f.task_type===tt.id?"#0984E3":t.text,
+                    fontSize:12,
+                    fontWeight:700,
+                    cursor:"pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    gap:5
+                  }}
+                >
+                  <span style={{fontSize:14}}>{tt.icon}</span> {tt.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:4, display:"block" }}>Status</label>
+            <select value={f.column} onChange={e=>set("column",e.target.value)} style={iS}>
+              {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+            </select>
+          </div>
+
+          {history.length > 0 && (
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:6, display:"block" }}>📋 Histórico de alterações</label>
+              <div style={{ display:"flex", flexDirection:"column", gap:3, maxHeight:130, overflowY:"auto" }}>
+                {history.map(h => (
+                  <div key={h.id} style={{ fontSize:11, color:t.mut, display:"flex", gap:8, padding:"5px 8px", background:t.colBg, borderRadius:6, alignItems:"center" }}>
+                    <span style={{ color:t.text, fontWeight:600, flexShrink:0 }}>{fieldLabels[h.field] || h.field}</span>
+                    <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.old_value||"—"} → <strong style={{color:t.text}}>{h.new_value||"—"}</strong></span>
+                    <span style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:10, flexShrink:0 }}>
+                      {h.created_at ? new Date(h.created_at).toLocaleDateString("pt-BR") : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end", flexWrap:"wrap" }}>
+          {!isNew && <button onClick={()=>{onDel(task.id); onClose();}} style={{...bS, background:"#FF767533", color:"#D63031"}}>Excluir</button>}
+          <button onClick={onClose} style={{...bS, background:t.colBg, color:t.mut}}>Cancelar</button>
+          <button onClick={handleSave} disabled={saving} style={{...bS, background:saving?"#0984E388":"#0984E3", color:"#fff", fontWeight:700}}>
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   CONFIGURAÇÕES
+========================= */
+function SettingsModal({ onClose, cls, setCls, mbs, setMbs, taskTypes, setTaskTypes, t, currentUser }) {
+  const isAdmin = currentUser?.role === "admin";
+  const isManager = currentUser?.role === "manager" || isAdmin;
+
+  const tabs = [
+    { id:"clients", label:"🏢 Clientes", show:true },
+    { id:"members", label:"👤 Equipe", show:true },
+    { id:"tasktypes", label:"📋 Tipos de Tarefa", show:true },
+    { id:"users", label:"🔐 Usuários", show:isAdmin },
+  ].filter(tb => tb.show);
+
+  const [tab, setTab] = useState("clients");
+  const [editCl, setEditCl] = useState(null);
+  const [newCl, setNewCl] = useState({ name:"", color: PCOLORS[0] });
+  const [editMb, setEditMb] = useState(null);
+  const [editTt, setEditTt] = useState(null);
+  const [newTt, setNewTt] = useState({ name:"", icon:"📋" });
+  const [invEmail, setInvEmail] = useState("");
+  const [invMsg, setInvMsg] = useState("");
+
+  const iS = { padding:"8px 10px", borderRadius:6, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box" };
+  const bS = (bg, cl) => ({ padding:"6px 14px", borderRadius:6, border:"none", fontSize:12, cursor:"pointer", background:bg, color:cl, fontWeight:700 });
+  const Row = ({ children }) => <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:t.colBg, borderRadius:8, marginBottom:6 }}>{children}</div>;
+
+  const saveCl = async (item) => {
+    if (!item.name.trim()) return;
+    const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+    const payload = { id, name:item.name.trim(), color:item.color };
+    await sb.from("clients").upsert(payload);
+    if (item._new) setCls(p => [...p, payload]);
+    else setCls(p => p.map(x => x.id === item.id ? payload : x));
+    setEditCl(null);
+    setNewCl({ name:"", color: PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
+  };
+
+  const delCl = async (id) => {
+    if (!window.confirm("Excluir este cliente?")) return;
+    await sb.from("clients").delete().eq("id", id);
+    setCls(p => p.filter(x => x.id !== id));
+  };
+
+  const saveMb = async (item) => {
+    if (!item.name.trim()) return;
+    const payload = {
+      id: item.id,
+      name: item.name.trim(),
+      initials: (item.initials||"").toUpperCase().slice(0,2),
+      color: item.color,
+      role: item.role || "member"
+    };
+    await sb.from("profiles").update(payload).eq("id", item.id);
+    setMbs(p => p.map(x => x.id === item.id ? { ...x, ...payload } : x));
+    setEditMb(null);
+  };
+
+  const saveTt = async (item) => {
+    if (!item.name.trim()) return;
+    const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+    const payload = { id, name:item.name.trim(), icon:item.icon || "📋" };
+    await sb.from("task_types").upsert(payload);
+    if (item._new) setTaskTypes(p => [...p, payload]);
+    else setTaskTypes(p => p.map(x => x.id === item.id ? payload : x));
+    setEditTt(null);
+    setNewTt({ name:"", icon:"📋" });
+  };
+
+  const delTt = async (id) => {
+    if (!window.confirm("Excluir este tipo de tarefa?")) return;
+    await sb.from("task_types").delete().eq("id", id);
+    setTaskTypes(p => p.filter(x => x.id !== id));
+  };
+
+  const updateRole = async (userId, role) => {
+    await sb.from("profiles").update({ role }).eq("id", userId);
+    setMbs(p => p.map(x => x.id === userId ? { ...x, role } : x));
+  };
+
+  const sendInvite = async () => {
+    if (!invEmail.trim()) return;
+    setInvMsg(`✅ Para convidar ${invEmail}, use o Dashboard do Supabase: Authentication → Users`);
+    setInvEmail("");
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)", padding:16 }}>
+      <div className="fade-in" style={{ background:t.card, borderRadius:16, width:"100%", maxWidth:560, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 48px rgba(0,0,0,0.25)" }}>
+        <div style={{ padding:"18px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:t.text }}>⚙️ Configurações</div>
+            <div style={{ fontSize:11, color:t.mut, marginTop:2 }}>Gerencie clientes, equipe e tipos de tarefa</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:t.mut }}>×</button>
+        </div>
+
+        <div style={{ display:"flex", padding:"14px 24px 0", borderBottom:"1px solid "+t.brd, overflowX:"auto" }}>
+          {tabs.map(tb => (
+            <button
+              key={tb.id}
+              onClick={() => setTab(tb.id)}
+              style={{
+                padding:"7px 12px",
+                borderRadius:"8px 8px 0 0",
+                border:"none",
+                cursor:"pointer",
+                fontSize:12,
+                fontWeight:700,
+                whiteSpace:"nowrap",
+                background: tab===tb.id ? t.bg : "transparent",
+                color: tab===tb.id ? t.text : t.mut,
+                borderBottom: tab===tb.id ? "2px solid #0984E3" : "2px solid transparent",
+                marginBottom:-1
+              }}
+            >
+              {tb.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"16px 24px 24px" }}>
+          {tab==="clients" && (
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Clientes cadastrados ({cls.length})</div>
+              {cls.map(c => (
+                <Row key={c.id}>
+                  {editCl?.id===c.id ? (
+                    <>
+                      <input value={editCl.name} onChange={e=>setEditCl(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome"/>
+                      <input type="color" value={editCl.color} onChange={e=>setEditCl(p=>({...p,color:e.target.value}))} style={{width:32,height:32,borderRadius:6,border:"none",padding:0}}/>
+                      <button onClick={()=>saveCl(editCl)} style={bS("#0984E3","#fff")}>✓</button>
+                      <button onClick={()=>setEditCl(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{width:14,height:14,borderRadius:3,background:c.color,flexShrink:0}}/>
+                      <span style={{flex:1,fontSize:13,fontWeight:600,color:t.text}}>{c.name}</span>
+                      <button onClick={()=>setEditCl({...c})} style={bS(t.colBg,t.mut)}>✏️</button>
+                      {isManager && <button onClick={()=>delCl(c.id)} style={bS("#FF767522","#D63031")}>🗑</button>}
+                    </>
+                  )}
+                </Row>
+              ))}
+
+              {isManager && (
+                <div style={{ marginTop:14, padding:"12px 10px", background:t.colBg, borderRadius:8, border:"1px dashed "+t.brd }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase" }}>+ Novo cliente</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <input value={newCl.name} onChange={e=>setNewCl(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome do cliente"/>
+                    <input type="color" value={newCl.color} onChange={e=>setNewCl(p=>({...p,color:e.target.value}))} style={{width:36,height:36,borderRadius:6,border:"none",padding:0}}/>
+                    <button onClick={()=>saveCl({...newCl,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab==="members" && (
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Membros da equipe ({mbs.length})</div>
+              {mbs.map(m => (
+                <Row key={m.id}>
+                  {editMb?.id===m.id ? (
+                    <>
+                      <input value={editMb.name} onChange={e=>setEditMb(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome"/>
+                      <input value={editMb.initials} onChange={e=>setEditMb(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))} style={{...iS,width:48}} placeholder="AB"/>
+                      <input type="color" value={editMb.color} onChange={e=>setEditMb(p=>({...p,color:e.target.value}))} style={{width:32,height:32,borderRadius:6,border:"none",padding:0}}/>
+                      <button onClick={()=>saveMb(editMb)} style={bS("#0984E3","#fff")}>✓</button>
+                      <button onClick={()=>setEditMb(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{width:30,height:30,borderRadius:"50%",background:m.color || "#0984E3",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>{m.initials||m.name?.slice(0,2)}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,color:t.text}}>{m.name}</div>
+                        <div style={{fontSize:10,color:t.mut}}>{m.email} · {ROLE_LABELS[m.role]||"Membro"}</div>
+                      </div>
+                      {(m.id===currentUser?.id || isAdmin) && <button onClick={()=>setEditMb({...m})} style={bS(t.colBg,t.mut)}>✏️</button>}
+                    </>
+                  )}
+                </Row>
+              ))}
+            </div>
+          )}
+
+          {tab==="tasktypes" && (
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Tipos de tarefa ({taskTypes.length})</div>
+              {taskTypes.map(tt => (
+                <Row key={tt.id}>
+                  {editTt?.id===tt.id ? (
+                    <>
+                      <input value={editTt.icon} onChange={e=>setEditTt(p=>({...p,icon:e.target.value}))} style={{...iS,width:48,textAlign:"center",fontSize:18}} placeholder="🔧"/>
+                      <input value={editTt.name} onChange={e=>setEditTt(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome do tipo"/>
+                      <button onClick={()=>saveTt(editTt)} style={bS("#0984E3","#fff")}>✓</button>
+                      <button onClick={()=>setEditTt(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{fontSize:18,flexShrink:0}}>{tt.icon}</span>
+                      <span style={{flex:1,fontSize:13,fontWeight:600,color:t.text}}>{tt.name}</span>
+                      {isManager && <>
+                        <button onClick={()=>setEditTt({...tt})} style={bS(t.colBg,t.mut)}>✏️</button>
+                        <button onClick={()=>delTt(tt.id)} style={bS("#FF767522","#D63031")}>🗑</button>
+                      </>}
+                    </>
+                  )}
+                </Row>
+              ))}
+
+              {isManager && (
+                <div style={{ marginTop:14, padding:"12px 10px", background:t.colBg, borderRadius:8, border:"1px dashed "+t.brd }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase" }}>+ Novo tipo</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <input value={newTt.icon} onChange={e=>setNewTt(p=>({...p,icon:e.target.value}))} style={{...iS,width:52,textAlign:"center",fontSize:18}} placeholder="🔧"/>
+                    <input value={newTt.name} onChange={e=>setNewTt(p=>({...p,name:e.target.value}))} style={{...iS,flex:1}} placeholder="Nome do tipo"/>
+                    <button onClick={()=>saveTt({...newTt,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab==="users" && isAdmin && (
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Controle de acesso ({mbs.length} usuários)</div>
+              {mbs.map(m => (
+                <Row key={m.id}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:m.color||"#0984E3",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>
+                    {m.initials||m.name?.slice(0,2)}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:t.text}}>{m.name}</div>
+                    <div style={{fontSize:10,color:t.mut}}>{m.email}</div>
+                  </div>
+                  <select value={m.role||"member"} onChange={e=>updateRole(m.id,e.target.value)} style={{...iS,width:"auto",padding:"4px 8px"}}>
+                    <option value="member">👤 Membro</option>
+                    <option value="manager">👔 Gerente</option>
+                    <option value="admin">🔑 Admin</option>
+                  </select>
+                </Row>
+              ))}
+
+              <div style={{ marginTop:14, padding:"14px", background:t.colBg, borderRadius:8, border:"1px dashed "+t.brd }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase" }}>✉️ Convidar novo usuário</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="email@exemplo.com" style={{...iS,flex:1}}/>
+                  <button onClick={sendInvite} style={{...bS("#0984E3","#fff"),whiteSpace:"nowrap"}}>Convidar</button>
+                </div>
+                {invMsg && <div style={{ marginTop:8, fontSize:12, color:t.mut, padding:"8px 10px", background:t.inp, borderRadius:6 }}>{invMsg}</div>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:"12px 24px", borderTop:"1px solid "+t.brd, display:"flex", justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={bS("#0984E3","#fff")}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   FILTROS
+========================= */
+function Filters({ filters, setF, cls, mbs, t, tasks }) {
+  const s = { padding:"6px 10px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:12, outline:"none", minWidth:0, flex:"1 1 100px" };
+  const usedCls = cls.filter(c => tasks.some(tk => (tk.client_id||tk.client)===c.id));
+  const usedPri = PRIORITIES.filter(p => tasks.some(tk => tk.priority===p.id));
+  const usedMbs = mbs.filter(m => tasks.some(tk => (tk.assignee_id||tk.assignee)===m.id));
+  const activeCols = filters.cols || COLUMNS.map(c=>c.id);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", whiteSpace:"nowrap" }}>Filtros:</span>
+
+        <select value={filters.client} onChange={e=>setF(p=>({...p,client:e.target.value}))} style={s}>
+          <option value="">Todos clientes</option>
+          {usedCls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+
+        <select value={filters.priority} onChange={e=>setF(p=>({...p,priority:e.target.value}))} style={s}>
+          <option value="">Todas prioridades</option>
+          {usedPri.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+
+        <select value={filters.assignee} onChange={e=>setF(p=>({...p,assignee:e.target.value}))} style={s}>
+          <option value="">Todos responsáveis</option>
+          {usedMbs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+
+        <select value={filters.sla||""} onChange={e=>setF(p=>({...p,sla:e.target.value}))} style={{...s,flex:"1 1 110px"}}>
+          <option value="">SLA: Todos</option>
+          <option value="ok">🟢 No prazo</option>
+          <option value="soon">🟡 Vence em breve</option>
+          <option value="late">🔴 Atrasadas</option>
+        </select>
+
+        <input value={filters.search} onChange={e=>setF(p=>({...p,search:e.target.value}))} placeholder="Buscar..." style={{...s,flex:"1 1 140px"}}/>
+      </div>
+
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", whiteSpace:"nowrap" }}>Colunas:</span>
+        {COLUMNS.map(col => {
+          const active = activeCols.includes(col.id);
+          const count = tasks.filter(tk=>tk.column===col.id).length;
+          return (
+            <label
+              key={col.id}
+              onClick={() => setF(p => {
+                const cur = p.cols || COLUMNS.map(c=>c.id);
+                return {
+                  ...p,
+                  cols: cur.includes(col.id) ? cur.filter(x=>x!==col.id) : [...cur, col.id]
+                };
+              })}
+              style={{
+                display:"flex",
+                alignItems:"center",
+                gap:5,
+                cursor:"pointer",
+                padding:"4px 10px",
+                borderRadius:6,
+                background:active?col.accent+"22":"transparent",
+                border:"1px solid "+(active?col.accent+"55":t.brd),
+                userSelect:"none"
+              }}
+            >
+              <span style={{ width:14, height:14, borderRadius:3, border:"2px solid "+(active?col.accent:t.mut), background:active?col.accent:"transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, color:"#fff" }}>
+                {active ? "✓" : ""}
+              </span>
+              <span style={{ fontSize:11, fontWeight:600, color:active?col.accent:t.mut }}>{col.icon} {col.name}</span>
+              <span style={{ fontSize:10, color:t.mut }}>({count})</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   APP
+========================= */
+function App() {
   const [recoveryMode, setRecoveryMode] = useState(false);
-  const [session, setSession]       = useState(null);
+  const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
 
-  const [tasks,     setTasks]     = useState([]);
-  const [cls,       setCls]       = useState([]);
-  const [mbs,       setMbs]       = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [cls, setCls] = useState([]);
+  const [mbs, setMbs] = useState([]);
   const [taskTypes, setTaskTypes] = useState([]);
-  const [sla,       setSla]       = useState({ baixa:30, media:10, importante:5, urgente:2 });
-  const [loaded,    setLoaded]    = useState(false);
+  const [sla, setSla] = useState({ baixa:30, media:10, importante:5, urgente:2 });
+  const [loaded, setLoaded] = useState(false);
 
-  const [mdl,          setMdl]          = useState(null);
+  const [mdl, setMdl] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showSla,      setShowSla]      = useState(false);
-  const [flt,          setFlt]          = useState({ client:"", priority:"", assignee:"", search:"", sla:"", cols:COLUMNS.map(c=>c.id) });
-  const [view,         setView]         = useState("kanban");
-  const [theme,        setTheme]        = useState(() => localStorage.getItem("gc-theme") || "dark");
+  const [showSla, setShowSla] = useState(false);
+  const [flt, setFlt] = useState({ client:"", priority:"", assignee:"", search:"", sla:"", cols:COLUMNS.map(c=>c.id) });
+  const [view, setView] = useState("kanban");
+  const [theme, setTheme] = useState(() => localStorage.getItem("gc-theme") || "dark");
 
   const t = TH[theme];
 
-  // ── Autenticação ─────────────────────────────────────────────
   useEffect(() => {
-  sb.auth.getSession().then(({ data: { session } }) => {
-    if (session && session.access_token) {
-      setSession(session);
-    } else {
-      setSession(null);
-    }
-    setAuthLoading(false);
-  });
+    let mounted = true;
 
-  sb.auth.onAuthStateChange((event, session) => {
-    setSession(session);
-    if (!session) {
-      setCurrentUser(null);
-      setLoaded(false);
-      setTasks([]);
-    }
-  });
-}, []);
+    async function initAuth() {
+      const fromUrl = await sb.auth.setSessionFromUrl();
 
-  // ── Carregamento dos dados ────────────────────────────────────
+      if (!mounted) return;
+
+      if (fromUrl?.data?.type === "recovery" && fromUrl?.data?.session?.access_token) {
+        setSession(fromUrl.data.session);
+        setRecoveryMode(true);
+        setAuthLoading(false);
+        return;
+      }
+
+      const { data: { session } } = await sb.auth.getSession();
+
+      if (!mounted) return;
+
+      if (session && session.access_token) {
+        setSession(session);
+      } else {
+        setSession(null);
+      }
+
+      setAuthLoading(false);
+    }
+
+    initAuth();
+
+    sb.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
+      setSession(nextSession);
+      if (!nextSession) {
+        setCurrentUser(null);
+        setLoaded(false);
+        setTasks([]);
+      }
+    });
+
+    return () => { mounted = false; };
+  }, []);
+
   useEffect(() => {
-    if (!session) return;
+    if (!session?.access_token) return;
 
     async function loadAll() {
-      const token = session.access_token;
       const [
         { data: tk },
         { data: cl },
@@ -999,7 +1232,7 @@ function ResetPasswordScreen({ t, onDone }) {
       if (cl) setCls(cl);
       if (mb) {
         setMbs(mb);
-        const me = mb.find(x => x.email === "leandro.vettori@globalcad.com.br");
+        const me = mb.find(x => x.id === session.user?.id) || mb.find(x => x.email === session.user?.email);
         if (me) setCurrentUser(me);
       }
       if (tt) setTaskTypes(tt);
@@ -1009,34 +1242,32 @@ function ResetPasswordScreen({ t, onDone }) {
 
     loadAll();
 
-    // Polling leve para sincronização (substitua pelo SDK @supabase/supabase-js para Realtime via WebSocket)
     const ch = sb.channel("tasks-poll");
     ch.on("postgres_changes", { event:"*", schema:"public", table:"tasks" }, (payload) => {
       if (payload.eventType==="UPDATE") setTasks(p => p.map(x => x.id===payload.new.id ? { ...x, ...payload.new } : x));
       if (payload.eventType==="INSERT") setTasks(p => [payload.new, ...p]);
-      if (payload.eventType==="DELETE") setTasks(p => p.filter(x => x.id!==payload.old?.id));
     }).subscribe();
 
     return () => sb.removeChannel(ch);
-  }, [session]);
+  }, [session?.access_token]);
 
-  // Persistir tema
-  useEffect(() => { localStorage.setItem("gc-theme", theme); }, [theme]);
+  useEffect(() => {
+    localStorage.setItem("gc-theme", theme);
+  }, [theme]);
 
-  // ── Ações de tarefa ──────────────────────────────────────────
   const today = () => new Date().toISOString().slice(0,10);
 
   const hSave = async (f) => {
     const payload = {
-      title:        f.title,
-      description:  f.description || "",
-      column:       f.column,
-      client_id:    f.client_id || f.client || null,
-      priority:     f.priority,
-      assignee_id:  f.assignee_id || f.assignee || null,
-      requester_id: f.requester_id || f.requester || null,
-      task_type:    f.task_type || f.taskType || null,
-      deadline:     f.deadline || null,
+      title: f.title,
+      description: f.description || "",
+      column: f.column,
+      client_id: f.client_id || null,
+      priority: f.priority,
+      assignee_id: f.assignee_id || null,
+      requester_id: f.requester_id || null,
+      task_type: f.task_type || null,
+      deadline: f.deadline || null,
     };
 
     if (f.id) {
@@ -1049,9 +1280,8 @@ function ResetPasswordScreen({ t, onDone }) {
   };
 
   const hDrop = async (tid, col) => {
-    setTasks(p => p.map(x => x.id===tid ? {...x, column:col} : x)); // otimista
+    setTasks(p => p.map(x => x.id===tid ? { ...x, column:col } : x));
     await sb.from("tasks").update({ column: col }).eq("id", tid);
-    // O trigger do banco registra o histórico e enfileira o e-mail automaticamente
   };
 
   const hDel = async (id) => {
@@ -1061,24 +1291,24 @@ function ResetPasswordScreen({ t, onDone }) {
 
   const hNC = async (c) => {
     await sb.from("clients").upsert({ id:c.id, name:c.name, color:c.color });
-    setCls(p => [...p.filter(x=>x.id!==c.id), c]);
+    setCls(p => [...p.filter(x => x.id !== c.id), c]);
   };
 
-  // ── Filtragem ────────────────────────────────────────────────
   const activeCols = flt.cols || COLUMNS.map(c=>c.id);
+
   const filtered = useMemo(() => tasks.filter(x => {
     if (!activeCols.includes(x.column)) return false;
     const cid = x.client_id || x.client;
-    if (flt.client   && cid !== flt.client)                           return false;
-    if (flt.priority && x.priority !== flt.priority)                  return false;
+    if (flt.client && cid !== flt.client) return false;
+    if (flt.priority && x.priority !== flt.priority) return false;
     const aid = x.assignee_id || x.assignee;
-    if (flt.assignee && aid !== flt.assignee)                         return false;
-    if (flt.search   && !x.title.toLowerCase().includes(flt.search.toLowerCase())) return false;
+    if (flt.assignee && aid !== flt.assignee) return false;
+    if (flt.search && !x.title.toLowerCase().includes(flt.search.toLowerCase())) return false;
     if (flt.sla) {
       const si = getSlaInfo(x, sla);
-      if (flt.sla==="late" && si.status!=="late")                     return false;
+      if (flt.sla==="late" && si.status!=="late") return false;
       if (flt.sla==="soon" && si.status!=="today" && si.status!=="soon") return false;
-      if (flt.sla==="ok"   && si.status!=="ok")                       return false;
+      if (flt.sla==="ok" && si.status!=="ok") return false;
     }
     return true;
   }), [tasks, flt, sla, activeCols]);
@@ -1087,118 +1317,161 @@ function ResetPasswordScreen({ t, onDone }) {
 
   const nT = () => {
     const td = today();
-    setMdl({ title:"", column:"pendente", client_id: cls[0]?.id||"", priority:"media",
-      assignee_id: currentUser?.id||"", requester_id: currentUser?.id||"",
-      description:"", deadline: calcDeadline(td,"media",sla), task_type:"" });
+    setMdl({
+      title:"",
+      column:"pendente",
+      client_id: cls[0]?.id || "",
+      priority:"media",
+      assignee_id: currentUser?.id || "",
+      requester_id: currentUser?.id || "",
+      description:"",
+      deadline: calcDeadline(td,"media",sla),
+      task_type:""
+    });
   };
 
-  const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer", fontFamily:"inherit" };
+  const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer" };
 
-  // ── Guarda de autenticação ───────────────────────────────────
-  if (authLoading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background: theme==="dark"?"#0F1117":"#F3F4F6", color: theme==="dark"?"#E8E9ED":"#111827", fontFamily:"'DM Sans',sans-serif" }}>
-      <span className="spin" style={{fontSize:28}}>⟳</span>
-    </div>
-  );
+  if (authLoading) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, color:t.text }}>
+        <span className="spin" style={{fontSize:28}}>⟳</span>
+      </div>
+    );
+  }
+
   if (recoveryMode) {
-  return <ResetPasswordScreen t={t} onDone={() => {
-    setRecoveryMode(false);
-    sb.auth.signOut();
-  }} />;
-}
-  if (!session || !session.access_token) {
-  return <LoginScreen t={t} />;
-}
+    return (
+      <ResetPasswordScreen
+        t={t}
+        onDone={async () => {
+          setRecoveryMode(false);
+          await sb.auth.signOut();
+          setSession(null);
+        }}
+      />
+    );
+  }
 
-  if (!loaded) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, color:t.text, fontFamily:"'DM Sans',sans-serif", gap:10 }}>
-      <span className="spin" style={{fontSize:20}}>⟳</span>
-      <span style={{fontSize:14,color:t.mut}}>Carregando dados...</span>
-    </div>
-  );
+  if (!session?.access_token) {
+    return <LoginScreen t={t} onLoggedIn={async () => {
+      const { data: { session: nextSession } } = await sb.auth.getSession();
+      setSession(nextSession);
+    }} />;
+  }
 
-  // ── Render principal ─────────────────────────────────────────
+  if (!loaded) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, color:t.text, gap:10 }}>
+        <span className="spin" style={{fontSize:20}}>⟳</span>
+        <span style={{fontSize:14,color:t.mut}}>Carregando dados...</span>
+      </div>
+    );
+  }
+
   return (
     <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:t.bg, minHeight:"100vh", color:t.text }}>
-
-      {/* NAVBAR */}
       <div style={{ padding:"10px 16px", borderBottom:"1px solid "+t.brd, background:t.navBg, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", position:"sticky", top:0, zIndex:100 }}>
-        <img src={LOGO} alt="GlobalCad" style={{ height:34, objectFit:"contain" }}/>
+        <img src={LOGO} alt="GlobalCad" style={{ height:34, objectFit:"contain" }} />
+
         <div style={{ fontSize:10, color:t.mut, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", borderLeft:"1px solid "+t.brd, paddingLeft:12 }}>
           Gestão de Tarefas
         </div>
 
         {lateCount > 0 && (
           <span onClick={()=>setFlt(p=>({...p,sla:"late"}))}
-            style={{ background:"#FF475722", color:"#FF4757", fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer", animation:"fadeIn .3s ease" }}>
+            style={{ background:"#FF475722", color:"#FF4757", fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer" }}>
             🔴 {lateCount} atrasada{lateCount>1?"s":""}
           </span>
         )}
 
-        <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
-          <button onClick={()=>setShowSla(!showSla)} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:11,fontWeight:700,border:"1px solid "+t.brd}} title="Configurar SLA">⏱ SLA</button>
-          <button onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:16}} title="Tema">{theme==="dark"?"☀":"🌙"}</button>
-          <button onClick={()=>setShowSettings(true)} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:14}} title="Configurações">⚙️</button>
+        <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+          <button onClick={()=>setShowSla(!showSla)} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:11,fontWeight:700,border:"1px solid "+t.brd}}>⏱ SLA</button>
+          <button onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:16}}>{theme==="dark"?"☀":"🌙"}</button>
+          <button onClick={()=>setShowSettings(true)} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:14}}>⚙️</button>
+
           {["kanban","table"].map(v => (
             <button key={v} onClick={()=>setView(v)} style={{...bS,padding:"6px 12px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",background:view===v?"#0984E3":t.colBg,color:view===v?"#fff":t.mut}}>
               {v==="kanban"?"⊞ Quadro":"☰ Grade"}
             </button>
           ))}
-         <button onClick={nT} style={{...bS,padding:"8px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}>
-           + Nova Tarefa
-         </button>
 
-         <button
-           onClick={() => sb.auth.signOut()}
-           style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid "+t.brd}}
-         >
-           Sair
-         </button>
-          {/* Avatar do usuário logado */}
+          <button onClick={nT} style={{...bS,padding:"8px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}>
+            + Nova Tarefa
+          </button>
+
+          <button
+            onClick={async () => {
+              await sb.auth.signOut();
+              setSession(null);
+            }}
+            style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid "+t.brd}}
+          >
+            Sair
+          </button>
+
           <div style={{ display:"flex", alignItems:"center", gap:8, paddingLeft:8, borderLeft:"1px solid "+t.brd }}>
             <Av m={currentUser?.id} mbs={mbs} sz={30}/>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:t.text, lineHeight:1.2 }}>{currentUser?.name||"Você"}</div>
               <div style={{ fontSize:10, color:t.mut, lineHeight:1 }}>{ROLE_LABELS[currentUser?.role]||"Membro"}</div>
             </div>
-            <button onClick={()=>sb.auth.signOut()} title="Sair" style={{...bS,padding:"4px 8px",background:t.colBg,color:t.mut,fontSize:11,border:"1px solid "+t.brd}}>Sair</button>
           </div>
         </div>
       </div>
 
-      {/* SLA CONFIG */}
       {showSla && (
         <div style={{ padding:"12px 16px", borderBottom:"1px solid "+t.brd, background:t.colBg }}>
           <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-            <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em" }}>SLA (dias):</span>
+            <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase" }}>SLA (dias):</span>
             {PRIORITIES.map(p => (
               <div key={p.id} style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <span style={{ fontSize:12, color:p.color, fontWeight:600 }}>{p.icon} {p.name}</span>
-                <input type="number" min={1} value={sla[p.id]||""} onChange={e=>setSla(s=>({...s,[p.id]:parseInt(e.target.value)||0}))}
-                  style={{ padding:"6px 10px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:13, outline:"none", fontFamily:"inherit", width:60, textAlign:"center" }}/>
+                <input
+                  type="number"
+                  min={1}
+                  value={sla[p.id]||""}
+                  onChange={e=>setSla(s=>({...s,[p.id]:parseInt(e.target.value)||0}))}
+                  style={{ padding:"6px 10px", borderRadius:8, border:"1px solid "+t.brd, background:t.inp, color:t.text, fontSize:13, outline:"none", width:60, textAlign:"center" }}
+                />
                 <span style={{ fontSize:10, color:t.mut }}>dias</span>
               </div>
             ))}
-            <button onClick={async()=>{
-              await Promise.all(PRIORITIES.map(p=>sb.from("sla_config").update({days:sla[p.id]}).eq("priority",p.id)));
-              setShowSla(false);
-            }} style={{...bS,padding:"6px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}>Salvar</button>
+
+            <button
+              onClick={async ()=>{
+                await Promise.all(PRIORITIES.map(p=>sb.from("sla_config").update({days:sla[p.id]}).eq("priority",p.id)));
+                setShowSla(false);
+              }}
+              style={{...bS,padding:"6px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}
+            >
+              Salvar
+            </button>
+
             <button onClick={()=>setShowSla(false)} style={{...bS,padding:"4px 12px",background:t.card,color:t.mut,fontSize:11}}>Fechar</button>
           </div>
         </div>
       )}
 
-      {/* FILTROS */}
       <div style={{ padding:"10px 16px" }}>
-        <Filters filters={flt} setF={setFlt} cls={cls} mbs={mbs} t={t} tasks={tasks} sla={sla}/>
+        <Filters filters={flt} setF={setFlt} cls={cls} mbs={mbs} t={t} tasks={tasks} />
       </div>
 
-      {/* BOARD / TABLE */}
       {view==="kanban" ? (
         <div style={{ padding:"0 16px 80px", display:"flex", gap:10, overflowX:"auto" }}>
           {COLUMNS.filter(col=>activeCols.includes(col.id)).map(col => (
-            <Col key={col.id} col={col} tasks={filtered.filter(x=>x.column===col.id)}
-              onEdit={setMdl} onDrop={hDrop} cls={cls} mbs={mbs} t={t} sla={sla} taskTypes={taskTypes}/>
+            <Col
+              key={col.id}
+              col={col}
+              tasks={filtered.filter(x=>x.column===col.id)}
+              onEdit={setMdl}
+              onDrop={hDrop}
+              cls={cls}
+              mbs={mbs}
+              t={t}
+              sla={sla}
+              taskTypes={taskTypes}
+            />
           ))}
         </div>
       ) : (
@@ -1207,25 +1480,19 @@ function ResetPasswordScreen({ t, onDone }) {
             <thead>
               <tr style={{ borderBottom:"2px solid "+t.brd }}>
                 {["Tarefa","Tipo","Cliente","Status","Prioridade","Prazo","SLA","Responsável"].map(h => (
-                  <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontWeight:800, fontSize:11, color:t.mut, textTransform:"uppercase", letterSpacing:"0.06em" }}>{h}</th>
+                  <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontWeight:800, fontSize:11, color:t.mut, textTransform:"uppercase" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(tk => {
                 const col = COLUMNS.find(c=>c.id===tk.column);
-                const tt  = taskTypes.find(x=>x.id===tk.task_type);
-                const dl  = tk.deadline || calcDeadline(tk.created_at?.slice(0,10)||"", tk.priority, sla);
+                const tt = taskTypes.find(x=>x.id===tk.task_type);
+                const dl = tk.deadline || calcDeadline(String(tk.created_at||"").slice(0,10), tk.priority, sla);
+
                 return (
-                  <tr key={tk.id} onClick={()=>setMdl(tk)} style={{ borderBottom:"1px solid "+t.brd, cursor:"pointer", transition:"background .1s" }}
-                    onMouseEnter={e=>e.currentTarget.style.background=t.colBg}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <td style={{ padding:"10px 12px", fontWeight:600 }}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        {tk.title}
-                        {tk.attachments?.length>0 && <span style={{fontSize:11,color:t.mut}}>📎{tk.attachments.length}</span>}
-                      </div>
-                    </td>
+                  <tr key={tk.id} onClick={()=>setMdl(tk)} style={{ borderBottom:"1px solid "+t.brd, cursor:"pointer" }}>
+                    <td style={{ padding:"10px 12px", fontWeight:600 }}>{tk.title}</td>
                     <td style={{ padding:"10px 12px", fontSize:11, color:t.mut }}>{tt ? `${tt.icon} ${tt.name}` : "—"}</td>
                     <td style={{ padding:"10px 12px" }}><Bg c={tk.client_id||tk.client} cls={cls}/></td>
                     <td style={{ padding:"10px 12px" }}><span style={{color:col?.accent,fontSize:12,fontWeight:600}}>{col?.icon} {col?.name}</span></td>
@@ -1238,6 +1505,7 @@ function ResetPasswordScreen({ t, onDone }) {
               })}
             </tbody>
           </table>
+
           {filtered.length===0 && (
             <div style={{ textAlign:"center", padding:"48px 0", color:t.mut }}>
               <div style={{fontSize:32}}>📋</div>
@@ -1247,7 +1515,6 @@ function ResetPasswordScreen({ t, onDone }) {
         </div>
       )}
 
-      {/* FOOTER */}
       <div style={{ position:"fixed", bottom:0, left:0, right:0, background:t.navBg, borderTop:"1px solid "+t.brd, padding:"7px 16px", display:"flex", gap:16, fontSize:11, color:t.mut, fontWeight:600, flexWrap:"wrap", zIndex:10 }}>
         {COLUMNS.map(col => (
           <span key={col.id} style={{ color:col.accent }}>{col.icon} {col.name}: {tasks.filter(x=>x.column===col.id).length}</span>
@@ -1255,21 +1522,40 @@ function ResetPasswordScreen({ t, onDone }) {
         <span style={{ marginLeft:"auto" }}>Total: {tasks.length} tarefas</span>
       </div>
 
-      {/* MODAIS */}
       {mdl && (
-        <TaskModal task={mdl} onSave={hSave} onDel={hDel} onClose={()=>setMdl(null)}
-          cls={cls} mbs={mbs} t={t} onNC={hNC} sla={sla} taskTypes={taskTypes} currentUser={currentUser}/>
+        <TaskModal
+          task={mdl}
+          onSave={hSave}
+          onDel={hDel}
+          onClose={()=>setMdl(null)}
+          cls={cls}
+          mbs={mbs}
+          t={t}
+          onNC={hNC}
+          sla={sla}
+          taskTypes={taskTypes}
+          currentUser={currentUser}
+        />
       )}
+
       {showSettings && (
-        <SettingsModal onClose={()=>setShowSettings(false)} cls={cls} setCls={setCls}
-          mbs={mbs} setMbs={setMbs} taskTypes={taskTypes} setTaskTypes={setTaskTypes}
-          t={t} currentUser={currentUser}/>
+        <SettingsModal
+          onClose={()=>setShowSettings(false)}
+          cls={cls}
+          setCls={setCls}
+          mbs={mbs}
+          setMbs={setMbs}
+          taskTypes={taskTypes}
+          setTaskTypes={setTaskTypes}
+          t={t}
+          currentUser={currentUser}
+        />
       )}
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
 </html>
