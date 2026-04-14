@@ -3,66 +3,76 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GlobalCad — Teste</title>
+  <title>GlobalCad — Gestão de Tarefas</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📋</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0F1117;
-      color: white;
-    }
-    .wrap {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 16px;
-    }
-    button {
-      padding: 10px 16px;
-      border: 0;
-      border-radius: 8px;
-      background: #0984E3;
-      color: white;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    input {
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background: #14161E;
-      color: white;
-      width: 280px;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
+    button, input, select, textarea { font-family: inherit; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #4a4a5a; border-radius: 3px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .spin { animation: spin .8s linear infinite; display: inline-block; }
+    .fade-in { animation: fadeIn .2s ease; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useMemo } = React;
 
     const SUPABASE_URL = "https://koetobzvkdohtmckugov.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_uhoJre1bAFZEbnZlCV05Lg_CO9Ta77J";
 
+    const sbHeaders = (token) => ({
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    });
+
     let _session = null;
+    const _listeners = [];
+
+    async function fetchSupabaseUser(token) {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: sbHeaders(token),
+      });
+      if (!r.ok) return null;
+      return await r.json();
+    }
 
     const sb = {
       auth: {
         getSession: async () => {
           const stored = localStorage.getItem("sb-session");
           if (!stored) return { data: { session: null } };
+
           try {
             const parsed = JSON.parse(stored);
+            if (!parsed?.access_token) {
+              localStorage.removeItem("sb-session");
+              return { data: { session: null } };
+            }
+
+            if (!parsed.user) {
+              const user = await fetchSupabaseUser(parsed.access_token);
+              if (user) parsed.user = user;
+            }
+
             _session = parsed;
+            localStorage.setItem("sb-session", JSON.stringify(parsed));
             return { data: { session: parsed } };
           } catch (e) {
             localStorage.removeItem("sb-session");
+            _session = null;
             return { data: { session: null } };
           }
         },
@@ -72,100 +82,1206 @@
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "apikey": SUPABASE_ANON_KEY
+              "apikey": SUPABASE_ANON_KEY,
             },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email, password }),
           });
 
           const data = await r.json();
 
-          if (!r.ok || !data.access_token) {
+          if (!r.ok || !data?.access_token) {
             return {
               data: null,
               error: { message: data.error_description || data.msg || data.error || "Credenciais inválidas" }
             };
           }
 
-          _session = data;
-          localStorage.setItem("sb-session", JSON.stringify(data));
-          return { data: { session: data }, error: null };
+          const user = await fetchSupabaseUser(data.access_token);
+          const session = { ...data, user };
+
+          _session = session;
+          localStorage.setItem("sb-session", JSON.stringify(session));
+          _listeners.forEach(fn => fn("SIGNED_IN", session));
+
+          return { data: { session }, error: null };
         },
 
         signOut: async () => {
           _session = null;
           localStorage.removeItem("sb-session");
+          _listeners.forEach(fn => fn("SIGNED_OUT", null));
+        },
+
+        onAuthStateChange: (fn) => {
+          _listeners.push(fn);
+          return { data: { subscription: { unsubscribe: () => {} } } };
         }
-      }
+      },
+
+      from: (table) => new QueryBuilder(table),
     };
 
-    function Login({ onLoggedIn }) {
-      const [email, setEmail] = useState("");
-      const [password, setPassword] = useState("");
-      const [error, setError] = useState("");
+    class QueryBuilder {
+      constructor(table) {
+        this._table = table;
+        this._filters = [];
+        this._sel = "*";
+        this._order = null;
+        this._limit = null;
+        this._single = false;
+        this._method = "GET";
+        this._body = null;
+        this._upsert = false;
+      }
 
-      const handleLogin = async () => {
-        setError("");
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          setError(error.message);
+      select(cols) { this._sel = cols || "*"; return this; }
+      eq(col, val) { this._filters.push(`${col}=eq.${encodeURIComponent(val)}`); return this; }
+      order(col, { ascending = true } = {}) { this._order = `${col}.${ascending ? "asc" : "desc"}`; return this; }
+      limit(n) { this._limit = n; return this; }
+      single() { this._single = true; return this; }
+      insert(body) { this._method = "POST"; this._body = body; return this; }
+      update(body) { this._method = "PATCH"; this._body = body; return this; }
+      upsert(body) { this._method = "POST"; this._body = body; this._upsert = true; return this; }
+      delete() { this._method = "DELETE"; return this; }
+
+      async then(resolve, reject) {
+        try {
+          const token = _session?.access_token;
+          let url = `${SUPABASE_URL}/rest/v1/${this._table}`;
+          const params = [];
+
+          if (["GET", "DELETE", "PATCH"].includes(this._method)) {
+            params.push(`select=${encodeURIComponent(this._sel)}`);
+            this._filters.forEach(f => params.push(f));
+            if (this._order) params.push(`order=${this._order}`);
+            if (this._limit) params.push(`limit=${this._limit}`);
+          }
+
+          if (params.length) url += "?" + params.join("&");
+
+          const headers = {
+            ...sbHeaders(token),
+            "Prefer": this._single
+              ? "return=representation,count=exact"
+              : (this._method !== "GET" ? "return=representation" : ""),
+          };
+
+          if (this._upsert) {
+            headers["Prefer"] = "resolution=merge-duplicates,return=representation";
+          }
+
+          const res = await fetch(url, {
+            method: this._method,
+            headers,
+            body: this._body ? JSON.stringify(this._body) : undefined,
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: res.statusText }));
+            return resolve({ data: null, error: err });
+          }
+
+          if (res.status === 204) {
+            return resolve({ data: null, error: null });
+          }
+
+          const json = await res.json();
+          const data = this._single ? (Array.isArray(json) ? json[0] : json) : json;
+          return resolve({ data, error: null });
+        } catch (e) {
+          return resolve({ data: null, error: { message: e.message } });
+        }
+      }
+    }
+
+    const TH = {
+      dark: {
+        bg:"#0F1117", card:"#1A1D27", colBg:"#14161E", colH:"#1C1F2A",
+        text:"#E8E9ED", mut:"#6B7280", brd:"#2A2D3A", inp:"#14161E", navBg:"#0F1117"
+      },
+      light: {
+        bg:"#F3F4F6", card:"#FFFFFF", colBg:"#F9FAFB", colH:"#EEF0F2",
+        text:"#111827", mut:"#9CA3AF", brd:"#E5E7EB", inp:"#F3F4F6", navBg:"#FFFFFF"
+      },
+    };
+
+    const PRIORITIES = [
+      { id:"baixa", name:"Baixa", color:"#74B9FF", icon:"↓" },
+      { id:"media", name:"Média", color:"#FFEAA7", icon:"—" },
+      { id:"importante", name:"Importante", color:"#FAB1A0", icon:"↑" },
+      { id:"urgente", name:"Urgente", color:"#FF7675", icon:"⚡" },
+    ];
+
+    const COLUMNS = [
+      { id:"pendente",  name:"Fila",         icon:"○", accent:"#636E72" },
+      { id:"andamento", name:"Em Andamento", icon:"◐", accent:"#0984E3" },
+      { id:"concluido", name:"Concluídas",   icon:"●", accent:"#00B894" },
+    ];
+
+    const ROLE_LABELS = { admin:"🔑 Admin", manager:"👔 Gerente", member:"👤 Membro" };
+    const PCOLORS = ["#6C5CE7","#00B894","#E17055","#D63031","#0984E3","#FDCB6E","#00CEC9","#A29BFE","#E84393","#FF9800"];
+
+    const LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40">
+        <rect width="180" height="40" rx="8" fill="#0F1117"/>
+        <text x="8" y="27" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#15AABF">GlobalCad</text>
+      </svg>
+    `);
+
+    function calcDeadline(created, priority, sla) {
+      if (!created) return "";
+      const d = new Date(created + "T00:00:00");
+      d.setDate(d.getDate() + (sla[priority] || 10));
+      return d.toISOString().slice(0, 10);
+    }
+
+    function getSlaInfo(task, sla) {
+      if (task.column === "concluido") return { status:"done", label:"Concluída", color:"#00B894" };
+      const dl = task.deadline;
+      if (!dl) return { status:"none", label:"", color:"#6B7280" };
+      const now = new Date(); now.setHours(0,0,0,0);
+      const end = new Date(dl + "T00:00:00");
+      const diff = Math.ceil((end - now) / 86400000);
+      if (diff < 0) return { status:"late", label:`Atrasada ${Math.abs(diff)}d`, color:"#FF4757" };
+      if (diff === 0) return { status:"today", label:"Vence hoje", color:"#FFA502" };
+      if (diff <= 2) return { status:"soon", label:`Vence em ${diff}d`, color:"#FFA502" };
+      return { status:"ok", label:`${diff}d restantes`, color:"#00B894" };
+    }
+
+    function SlaTag({ task, sla, small }) {
+      const info = getSlaInfo(task, sla);
+      if (info.status === "none") return null;
+      const ico = { late:"🔴", today:"🟡", soon:"🟡", done:"✅", ok:"🟢" }[info.status] || "🟢";
+      return (
+        <span style={{ fontSize: small ? 9 : 10, color: info.color, fontWeight: 700, whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:2 }}>
+          {ico} {!small && info.label}
+        </span>
+      );
+    }
+
+    function Av({ m, mbs, sz=28 }) {
+      if (!m) return null;
+      const x = mbs.find(a => a.id === m);
+      if (!x) return null;
+      return (
+        <div title={x.name} style={{
+          width:sz, height:sz, borderRadius:"50%", background:x.color || "#0984E3",
+          color:"#fff", display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:sz * 0.4, fontWeight:700, flexShrink:0
+        }}>
+          {x.initials || x.name?.slice(0,2) || "?"}
+        </div>
+      );
+    }
+
+    function Bg({ c, cls }) {
+      const x = cls.find(a => a.id === c || a.id === c?.id);
+      if (!x) return null;
+      return (
+        <span style={{
+          background:x.color + "22", color:x.color, fontSize:10, fontWeight:700,
+          padding:"2px 8px", borderRadius:4, textTransform:"uppercase",
+          border:"1px solid " + x.color + "33", whiteSpace:"nowrap"
+        }}>
+          {x.name}
+        </span>
+      );
+    }
+
+    function Pd({ pid }) {
+      const p = PRIORITIES.find(x => x.id === pid);
+      if (!p) return null;
+      return <span style={{ fontSize:13, color:p.color }}>{p.icon}</span>;
+    }
+
+    function LoginScreen({ t, onLoggedIn }) {
+      const [email, setEmail] = useState("");
+      const [pass, setPass] = useState("");
+      const [err, setErr] = useState("");
+      const [loading, setLoading] = useState(false);
+
+      const iS = {
+        padding:"11px 14px", borderRadius:8, border:"1px solid " + t.brd,
+        background:t.inp, color:t.text, fontSize:13, outline:"none", width:"100%"
+      };
+
+      const login = async () => {
+        if (!email || !pass) {
+          setErr("Preencha e-mail e senha.");
           return;
         }
-        onLoggedIn();
+
+        setLoading(true);
+        setErr("");
+
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+
+        if (error) {
+          setErr(error.message);
+          setLoading(false);
+          return;
+        }
+
+        onLoggedIn?.();
       };
 
       return (
-        <div className="wrap">
-          <h1>GlobalCad</h1>
-          <input
-            type="email"
-            placeholder="E-mail"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-          />
-          <button onClick={handleLogin}>Entrar</button>
-          {error ? <div style={{ color: "#ff7675" }}>{error}</div> : null}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg }}>
+          <div className="fade-in" style={{
+            background:t.card, borderRadius:16, padding:"32px 28px", width:"100%",
+            maxWidth:380, boxShadow:"0 24px 48px rgba(0,0,0,0.2)"
+          }}>
+            <img src={LOGO} alt="GlobalCad" style={{ height:38, objectFit:"contain", marginBottom:8 }} />
+            <div style={{ fontSize:10, color:t.mut, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:28 }}>
+              Gestão de Tarefas
+            </div>
+            <h2 style={{ color:t.text, margin:"0 0 6px", fontSize:20, fontWeight:800 }}>Bem-vindo</h2>
+            <p style={{ color:t.mut, fontSize:13, margin:"0 0 24px" }}>Entre com sua conta para continuar</p>
+
+            {err && (
+              <div style={{ color:"#FF4757", fontSize:12, marginBottom:14, padding:"10px 12px", background:"#FF475711", borderRadius:8, border:"1px solid #FF475733" }}>
+                ⚠️ {err}
+              </div>
+            )}
+
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" style={iS} />
+              <input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} placeholder="Senha" style={iS} />
+              <button onClick={login} disabled={loading} style={{
+                padding:12, borderRadius:8, background:loading ? "#0984E388" : "#0984E3",
+                color:"#fff", border:"none", fontSize:14, fontWeight:700, cursor:loading ? "not-allowed" : "pointer"
+              }}>
+                {loading ? "Entrando..." : "Entrar →"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Card({ task, onEdit, cls, mbs, t, sla, taskTypes }) {
+      const p = PRIORITIES.find(x => x.id === task.priority);
+      const si = getSlaInfo(task, sla);
+      const borderColor = si.status === "late" ? "#FF4757" : (p?.color || "#ddd");
+      const tt = taskTypes.find(x => x.id === task.task_type);
+
+      return (
+        <div
+          draggable
+          onDragStart={e => e.dataTransfer.setData("tid", task.id)}
+          onClick={() => onEdit(task)}
+          className="fade-in"
+          style={{
+            background:t.card, borderRadius:8, padding:"12px 14px", cursor:"grab",
+            borderLeft:"3px solid " + borderColor, display:"flex", flexDirection:"column", gap:8
+          }}
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
+            <Bg c={task.client_id || task.client} cls={cls} />
+            <Pd pid={task.priority} />
+          </div>
+
+          {tt && <div style={{ fontSize:10, color:t.mut, fontWeight:600 }}>{tt.icon} {tt.name}</div>}
+          <div style={{ fontSize:13, fontWeight:600, color:t.text, lineHeight:1.35 }}>{task.title}</div>
+
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:10, color:t.mut, fontFamily:"monospace" }}>
+                {task.created_at ? String(task.created_at).slice(0,10) : ""}
+              </span>
+              <SlaTag task={task} sla={sla} small />
+            </div>
+            <Av m={task.assignee_id || task.assignee} mbs={mbs} sz={22} />
+          </div>
+        </div>
+      );
+    }
+
+    function Col({ col, tasks, onEdit, onDrop, cls, mbs, t, sla, taskTypes }) {
+      const [ov, setOv] = useState(false);
+
+      return (
+        <div
+          onDragOver={e=>{e.preventDefault(); setOv(true);}}
+          onDragLeave={()=>setOv(false)}
+          onDrop={e=>{e.preventDefault(); setOv(false); onDrop(e.dataTransfer.getData("tid"), col.id);}}
+          style={{
+            flex:"1 1 260px", minWidth:260, maxWidth:340, display:"flex", flexDirection:"column",
+            background:ov ? t.colH : t.colBg, borderRadius:12
+          }}
+        >
+          <div style={{ padding:"14px 14px 10px", display:"flex", alignItems:"center", gap:8, borderBottom:"2px solid " + col.accent + "44" }}>
+            <span style={{ fontSize:14, color:col.accent }}>{col.icon}</span>
+            <span style={{ fontWeight:800, fontSize:12, color:t.text, textTransform:"uppercase" }}>{col.name}</span>
+            <span style={{ marginLeft:"auto", background:col.accent + "22", color:col.accent, fontSize:11, fontWeight:800, padding:"2px 8px", borderRadius:10 }}>
+              {tasks.length}
+            </span>
+          </div>
+
+          <div style={{ padding:8, display:"flex", flexDirection:"column", gap:8, flex:1, overflowY:"auto", maxHeight:"calc(100vh - 240px)" }}>
+            {tasks.map(tk => (
+              <Card key={tk.id} task={tk} onEdit={onEdit} cls={cls} mbs={mbs} t={t} sla={sla} taskTypes={taskTypes} />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function TaskModal({ task, onSave, onDel, onClose, cls, mbs, t, onNC, sla, taskTypes, currentUser }) {
+      const isNew = !task.id;
+      const today = new Date().toISOString().slice(0,10);
+
+      const [f, sF] = useState({
+        title:"",
+        description:"",
+        column:"pendente",
+        client_id:cls[0]?.id || "",
+        priority:"media",
+        assignee_id:currentUser?.id || "",
+        requester_id:currentUser?.id || "",
+        task_type:"",
+        deadline:calcDeadline(today, "media", sla),
+        ...task,
+        client_id:task.client_id || task.client || cls[0]?.id || "",
+        assignee_id:task.assignee_id || task.assignee || currentUser?.id || "",
+        requester_id:task.requester_id || task.requester || currentUser?.id || "",
+        task_type:task.task_type || "",
+      });
+
+      const [saving, setSaving] = useState(false);
+      const [snc, setSnc] = useState(false);
+      const [nc, setNc] = useState({ name:"", color:PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
+
+      const set = (k, v) => sF(p => {
+        const nf = { ...p, [k]:v };
+        return nf;
+      });
+
+      const handleSave = async () => {
+        if (!f.title.trim()) return;
+        setSaving(true);
+        await onSave(f);
+        setSaving(false);
+        onClose();
+      };
+
+      const addClient = () => {
+        if (!nc.name.trim()) return;
+        const c = { id:nc.name.toLowerCase().replace(/\s+/g,"_"), name:nc.name.trim(), color:nc.color };
+        onNC(c);
+        set("client_id", c.id);
+        setSnc(false);
+      };
+
+      const iS = {
+        padding:"10px 12px", borderRadius:8, border:"1px solid " + t.brd,
+        background:t.inp, color:t.text, fontSize:13, outline:"none", width:"100%"
+      };
+      const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer" };
+
+      return (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div className="fade-in" style={{
+            background:t.card, borderRadius:16, padding:24, width:"100%",
+            maxWidth:500, maxHeight:"92vh", overflowY:"auto"
+          }}>
+            <h3 style={{ margin:"0 0 18px", fontSize:16, fontWeight:800, color:t.text }}>
+              {isNew ? "Nova Tarefa" : "Editar Tarefa"}
+            </h3>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <input value={f.title} onChange={e=>set("title", e.target.value)} placeholder="Título da tarefa" style={iS} />
+              <textarea value={f.description||""} onChange={e=>set("description", e.target.value)} placeholder="Descreva a tarefa..." rows={3} style={{...iS, resize:"vertical"}} />
+
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:4 }}>Cliente</label>
+                <div style={{ display:"flex", gap:8 }}>
+                  <select value={f.client_id||""} onChange={e=>set("client_id", e.target.value)} style={{...iS, flex:1}}>
+                    <option value="">Selecione...</option>
+                    {cls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button onClick={()=>setSnc(!snc)} style={{...bS, background:t.colBg, color:t.mut, border:"1px solid " + t.brd}}>+</button>
+                </div>
+
+                {snc && (
+                  <div style={{ marginTop:8, padding:12, background:t.colBg, borderRadius:8, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                    <input value={nc.name} onChange={e=>setNc(p=>({...p,name:e.target.value}))} placeholder="Nome do cliente" style={{...iS, flex:"1 1 120px"}} />
+                    <input type="color" value={nc.color} onChange={e=>setNc(p=>({...p,color:e.target.value}))} style={{ width:36, height:36, border:"none", padding:0 }} />
+                    <button onClick={addClient} style={{...bS, background:"#0984E3", color:"#fff"}}>Adicionar</button>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:4 }}>Prioridade</label>
+                  <select value={f.priority} onChange={e=>set("priority", e.target.value)} style={iS}>
+                    {PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:4 }}>Solicitante</label>
+                  <select value={f.requester_id||""} onChange={e=>set("requester_id", e.target.value)} style={iS}>
+                    <option value="">Selecione...</option>
+                    {mbs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:4 }}>Responsável</label>
+                  <select value={f.assignee_id||""} onChange={e=>set("assignee_id", e.target.value)} style={iS}>
+                    <option value="">Selecione...</option>
+                    {mbs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:4 }}>Prazo</label>
+                  <input type="date" value={f.deadline||""} onChange={e=>sF(p=>({...p,deadline:e.target.value}))} style={iS} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:6 }}>Tipo de Tarefa</label>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {taskTypes.map(tt => (
+                    <button
+                      key={tt.id}
+                      onClick={()=>set("task_type", f.task_type===tt.id ? "" : tt.id)}
+                      style={{
+                        padding:"7px 12px", borderRadius:8, cursor:"pointer",
+                        border:"2px solid " + (f.task_type===tt.id ? "#0984E3" : t.brd),
+                        background:f.task_type===tt.id ? "#0984E322" : t.inp,
+                        color:f.task_type===tt.id ? "#0984E3" : t.text,
+                        fontSize:12, fontWeight:700
+                      }}
+                    >
+                      {tt.icon} {tt.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:t.mut, display:"block", marginBottom:4 }}>Status</label>
+                <select value={f.column} onChange={e=>set("column", e.target.value)} style={iS}>
+                  {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end", flexWrap:"wrap" }}>
+              {!isNew && <button onClick={()=>{onDel(task.id); onClose();}} style={{...bS, background:"#FF767533", color:"#D63031"}}>Excluir</button>}
+              <button onClick={onClose} style={{...bS, background:t.colBg, color:t.mut}}>Cancelar</button>
+              <button onClick={handleSave} disabled={saving} style={{...bS, background:"#0984E3", color:"#fff", fontWeight:700}}>
+                {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SettingsModal({ onClose, cls, setCls, mbs, setMbs, taskTypes, setTaskTypes, t, currentUser }) {
+      const isAdmin = currentUser?.role === "admin";
+      const isManager = currentUser?.role === "manager" || isAdmin;
+
+      const tabs = [
+        { id:"clients", label:"🏢 Clientes", show:true },
+        { id:"members", label:"👤 Equipe", show:true },
+        { id:"tasktypes", label:"📋 Tipos de Tarefa", show:true },
+        { id:"users", label:"🔐 Usuários", show:isAdmin },
+      ].filter(tb => tb.show);
+
+      const [tab, setTab] = useState("clients");
+      const [editCl, setEditCl] = useState(null);
+      const [newCl, setNewCl] = useState({ name:"", color:PCOLORS[0] });
+      const [editMb, setEditMb] = useState(null);
+      const [editTt, setEditTt] = useState(null);
+      const [newTt, setNewTt] = useState({ name:"", icon:"📋" });
+
+      const iS = {
+        padding:"8px 10px", borderRadius:6, border:"1px solid " + t.brd,
+        background:t.inp, color:t.text, fontSize:12, outline:"none", width:"100%"
+      };
+      const bS = (bg, cl) => ({ padding:"6px 14px", borderRadius:6, border:"none", fontSize:12, cursor:"pointer", background:bg, color:cl, fontWeight:700 });
+      const Row = ({ children }) => <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:t.colBg, borderRadius:8, marginBottom:6 }}>{children}</div>;
+
+      const saveCl = async (item) => {
+        if (!item.name.trim()) return;
+        const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+        const payload = { id, name:item.name.trim(), color:item.color };
+        await sb.from("clients").upsert(payload);
+        if (item._new) setCls(p => [...p, payload]);
+        else setCls(p => p.map(x => x.id === item.id ? payload : x));
+        setEditCl(null);
+        setNewCl({ name:"", color:PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
+      };
+
+      const delCl = async (id) => {
+        if (!window.confirm("Excluir este cliente?")) return;
+        await sb.from("clients").delete().eq("id", id);
+        setCls(p => p.filter(x => x.id !== id));
+      };
+
+      const saveMb = async (item) => {
+        if (!item.name.trim()) return;
+        const payload = {
+          id:item.id,
+          name:item.name.trim(),
+          initials:(item.initials||"").toUpperCase().slice(0,2),
+          color:item.color,
+          role:item.role || "member"
+        };
+        await sb.from("profiles").update(payload).eq("id", item.id);
+        setMbs(p => p.map(x => x.id === item.id ? { ...x, ...payload } : x));
+        setEditMb(null);
+      };
+
+      const saveTt = async (item) => {
+        if (!item.name.trim()) return;
+        const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+        const payload = { id, name:item.name.trim(), icon:item.icon || "📋" };
+        await sb.from("task_types").upsert(payload);
+        if (item._new) setTaskTypes(p => [...p, payload]);
+        else setTaskTypes(p => p.map(x => x.id === item.id ? payload : x));
+        setEditTt(null);
+        setNewTt({ name:"", icon:"📋" });
+      };
+
+      const delTt = async (id) => {
+        if (!window.confirm("Excluir este tipo de tarefa?")) return;
+        await sb.from("task_types").delete().eq("id", id);
+        setTaskTypes(p => p.filter(x => x.id !== id));
+      };
+
+      const updateRole = async (userId, role) => {
+        await sb.from("profiles").update({ role }).eq("id", userId);
+        setMbs(p => p.map(x => x.id === userId ? { ...x, role } : x));
+      };
+
+      return (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div className="fade-in" style={{ background:t.card, borderRadius:16, width:"100%", maxWidth:560, maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
+            <div style={{ padding:"18px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div>
+                <div style={{ fontSize:16, fontWeight:800, color:t.text }}>⚙️ Configurações</div>
+                <div style={{ fontSize:11, color:t.mut, marginTop:2 }}>Gerencie clientes, equipe e tipos de tarefa</div>
+              </div>
+              <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:t.mut }}>×</button>
+            </div>
+
+            <div style={{ display:"flex", padding:"14px 24px 0", borderBottom:"1px solid " + t.brd, overflowX:"auto" }}>
+              {tabs.map(tb => (
+                <button
+                  key={tb.id}
+                  onClick={() => setTab(tb.id)}
+                  style={{
+                    padding:"7px 12px", borderRadius:"8px 8px 0 0", border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700, whiteSpace:"nowrap",
+                    background:tab===tb.id ? t.bg : "transparent",
+                    color:tab===tb.id ? t.text : t.mut,
+                    borderBottom:tab===tb.id ? "2px solid #0984E3" : "2px solid transparent",
+                    marginBottom:-1
+                  }}
+                >
+                  {tb.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ flex:1, overflowY:"auto", padding:"16px 24px 24px" }}>
+              {tab==="clients" && (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Clientes cadastrados ({cls.length})</div>
+                  {cls.map(c => (
+                    <Row key={c.id}>
+                      {editCl?.id===c.id ? (
+                        <>
+                          <input value={editCl.name} onChange={e=>setEditCl(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
+                          <input type="color" value={editCl.color} onChange={e=>setEditCl(p=>({...p,color:e.target.value}))} style={{ width:32, height:32, border:"none", padding:0 }} />
+                          <button onClick={()=>saveCl(editCl)} style={bS("#0984E3","#fff")}>✓</button>
+                          <button onClick={()=>setEditCl(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ width:14, height:14, borderRadius:3, background:c.color, flexShrink:0 }} />
+                          <span style={{ flex:1, fontSize:13, fontWeight:600, color:t.text }}>{c.name}</span>
+                          <button onClick={()=>setEditCl({...c})} style={bS(t.colBg,t.mut)}>✏️</button>
+                          {isManager && <button onClick={()=>delCl(c.id)} style={bS("#FF767522","#D63031")}>🗑</button>}
+                        </>
+                      )}
+                    </Row>
+                  ))}
+
+                  {isManager && (
+                    <div style={{ marginTop:14, padding:"12px 10px", background:t.colBg, borderRadius:8, border:"1px dashed " + t.brd }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase" }}>+ Novo cliente</div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <input value={newCl.name} onChange={e=>setNewCl(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} placeholder="Nome do cliente" />
+                        <input type="color" value={newCl.color} onChange={e=>setNewCl(p=>({...p,color:e.target.value}))} style={{ width:36, height:36, border:"none", padding:0 }} />
+                        <button onClick={()=>saveCl({...newCl,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab==="members" && (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Membros da equipe ({mbs.length})</div>
+                  {mbs.map(m => (
+                    <Row key={m.id}>
+                      {editMb?.id===m.id ? (
+                        <>
+                          <input value={editMb.name} onChange={e=>setEditMb(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
+                          <input value={editMb.initials} onChange={e=>setEditMb(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))} style={{...iS, width:48}} />
+                          <input type="color" value={editMb.color} onChange={e=>setEditMb(p=>({...p,color:e.target.value}))} style={{ width:32, height:32, border:"none", padding:0 }} />
+                          <button onClick={()=>saveMb(editMb)} style={bS("#0984E3","#fff")}>✓</button>
+                          <button onClick={()=>setEditMb(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ width:30, height:30, borderRadius:"50%", background:m.color || "#0984E3", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", flexShrink:0 }}>
+                            {m.initials || m.name?.slice(0,2)}
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:t.text }}>{m.name}</div>
+                            <div style={{ fontSize:10, color:t.mut }}>{m.email} · {ROLE_LABELS[m.role] || "Membro"}</div>
+                          </div>
+                          {(m.id===currentUser?.id || isAdmin) && <button onClick={()=>setEditMb({...m})} style={bS(t.colBg,t.mut)}>✏️</button>}
+                        </>
+                      )}
+                    </Row>
+                  ))}
+                </div>
+              )}
+
+              {tab==="tasktypes" && (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Tipos de tarefa ({taskTypes.length})</div>
+                  {taskTypes.map(tt => (
+                    <Row key={tt.id}>
+                      {editTt?.id===tt.id ? (
+                        <>
+                          <input value={editTt.icon} onChange={e=>setEditTt(p=>({...p,icon:e.target.value}))} style={{...iS, width:48, textAlign:"center"}} />
+                          <input value={editTt.name} onChange={e=>setEditTt(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
+                          <button onClick={()=>saveTt(editTt)} style={bS("#0984E3","#fff")}>✓</button>
+                          <button onClick={()=>setEditTt(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize:18, flexShrink:0 }}>{tt.icon}</span>
+                          <span style={{ flex:1, fontSize:13, fontWeight:600, color:t.text }}>{tt.name}</span>
+                          {isManager && <>
+                            <button onClick={()=>setEditTt({...tt})} style={bS(t.colBg,t.mut)}>✏️</button>
+                            <button onClick={()=>delTt(tt.id)} style={bS("#FF767522","#D63031")}>🗑</button>
+                          </>}
+                        </>
+                      )}
+                    </Row>
+                  ))}
+
+                  {isManager && (
+                    <div style={{ marginTop:14, padding:"12px 10px", background:t.colBg, borderRadius:8, border:"1px dashed " + t.brd }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:t.mut, marginBottom:8, textTransform:"uppercase" }}>+ Novo tipo</div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <input value={newTt.icon} onChange={e=>setNewTt(p=>({...p,icon:e.target.value}))} style={{...iS, width:52, textAlign:"center"}} />
+                        <input value={newTt.name} onChange={e=>setNewTt(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
+                        <button onClick={()=>saveTt({...newTt,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab==="users" && isAdmin && (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>
+                    Controle de acesso ({mbs.length} usuários)
+                  </div>
+                  {mbs.map(m => (
+                    <Row key={m.id}>
+                      <div style={{ width:30, height:30, borderRadius:"50%", background:m.color || "#0984E3", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", flexShrink:0 }}>
+                        {m.initials || m.name?.slice(0,2)}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:600, color:t.text }}>{m.name}</div>
+                        <div style={{ fontSize:10, color:t.mut }}>{m.email}</div>
+                      </div>
+                      <select value={m.role||"member"} onChange={e=>updateRole(m.id, e.target.value)} style={{...iS, width:"auto", padding:"4px 8px"}}>
+                        <option value="member">👤 Membro</option>
+                        <option value="manager">👔 Gerente</option>
+                        <option value="admin">🔑 Admin</option>
+                      </select>
+                    </Row>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding:"12px 24px", borderTop:"1px solid " + t.brd, display:"flex", justifyContent:"flex-end" }}>
+              <button onClick={onClose} style={bS("#0984E3","#fff")}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Filters({ filters, setF, cls, mbs, t, tasks }) {
+      const s = {
+        padding:"6px 10px", borderRadius:8, border:"1px solid " + t.brd,
+        background:t.inp, color:t.text, fontSize:12, outline:"none", minWidth:0, flex:"1 1 100px"
+      };
+
+      const usedCls = cls.filter(c => tasks.some(tk => (tk.client_id||tk.client)===c.id));
+      const usedPri = PRIORITIES.filter(p => tasks.some(tk => tk.priority===p.id));
+      const usedMbs = mbs.filter(m => tasks.some(tk => (tk.assignee_id||tk.assignee)===m.id));
+      const activeCols = filters.cols || COLUMNS.map(c=>c.id);
+
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", whiteSpace:"nowrap" }}>Filtros:</span>
+
+            <select value={filters.client} onChange={e=>setF(p=>({...p,client:e.target.value}))} style={s}>
+              <option value="">Todos clientes</option>
+              {usedCls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+
+            <select value={filters.priority} onChange={e=>setF(p=>({...p,priority:e.target.value}))} style={s}>
+              <option value="">Todas prioridades</option>
+              {usedPri.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+
+            <select value={filters.assignee} onChange={e=>setF(p=>({...p,assignee:e.target.value}))} style={s}>
+              <option value="">Todos responsáveis</option>
+              {usedMbs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+
+            <select value={filters.sla||""} onChange={e=>setF(p=>({...p,sla:e.target.value}))} style={{...s, flex:"1 1 110px"}}>
+              <option value="">SLA: Todos</option>
+              <option value="ok">🟢 No prazo</option>
+              <option value="soon">🟡 Vence em breve</option>
+              <option value="late">🔴 Atrasadas</option>
+            </select>
+
+            <input value={filters.search} onChange={e=>setF(p=>({...p,search:e.target.value}))} placeholder="Buscar..." style={{...s, flex:"1 1 140px"}} />
+          </div>
+
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", whiteSpace:"nowrap" }}>Colunas:</span>
+            {COLUMNS.map(col => {
+              const active = activeCols.includes(col.id);
+              const count = tasks.filter(tk => tk.column===col.id).length;
+              return (
+                <label
+                  key={col.id}
+                  onClick={() => setF(p => {
+                    const cur = p.cols || COLUMNS.map(c=>c.id);
+                    return { ...p, cols: cur.includes(col.id) ? cur.filter(x=>x!==col.id) : [...cur, col.id] };
+                  })}
+                  style={{
+                    display:"flex", alignItems:"center", gap:5, cursor:"pointer", padding:"4px 10px", borderRadius:6,
+                    background:active ? col.accent + "22" : "transparent",
+                    border:"1px solid " + (active ? col.accent + "55" : t.brd), userSelect:"none"
+                  }}
+                >
+                  <span style={{
+                    width:14, height:14, borderRadius:3, border:"2px solid " + (active ? col.accent : t.mut),
+                    background:active ? col.accent : "transparent", display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:10, color:"#fff"
+                  }}>
+                    {active ? "✓" : ""}
+                  </span>
+                  <span style={{ fontSize:11, fontWeight:600, color:active ? col.accent : t.mut }}>{col.icon} {col.name}</span>
+                  <span style={{ fontSize:10, color:t.mut }}>({count})</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
       );
     }
 
     function App() {
-      const [loading, setLoading] = useState(true);
       const [session, setSession] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+      const [currentUser, setCurrentUser] = useState(null);
+
+      const [tasks, setTasks] = useState([]);
+      const [cls, setCls] = useState([]);
+      const [mbs, setMbs] = useState([]);
+      const [taskTypes, setTaskTypes] = useState([]);
+      const [sla, setSla] = useState({ baixa:30, media:10, importante:5, urgente:2 });
+      const [loaded, setLoaded] = useState(false);
+
+      const [mdl, setMdl] = useState(null);
+      const [showSettings, setShowSettings] = useState(false);
+      const [showSla, setShowSla] = useState(false);
+      const [flt, setFlt] = useState({ client:"", priority:"", assignee:"", search:"", sla:"", cols:COLUMNS.map(c=>c.id) });
+      const [view, setView] = useState("kanban");
+      const [theme, setTheme] = useState(() => localStorage.getItem("gc-theme") || "dark");
+
+      const t = TH[theme];
 
       useEffect(() => {
-        sb.auth.getSession().then(({ data }) => {
-          setSession(data.session);
-          setLoading(false);
+        let mounted = true;
+
+        async function init() {
+          const { data: { session } } = await sb.auth.getSession();
+          if (!mounted) return;
+
+          if (session?.access_token) setSession(session);
+          else setSession(null);
+
+          setAuthLoading(false);
+        }
+
+        init();
+
+        sb.auth.onAuthStateChange((event, nextSession) => {
+          if (!mounted) return;
+          setSession(nextSession);
+          if (!nextSession) {
+            setCurrentUser(null);
+            setLoaded(false);
+            setTasks([]);
+          }
         });
+
+        return () => { mounted = false; };
       }, []);
 
-      if (loading) {
-        return <div className="wrap"><h2>Carregando...</h2></div>;
+      useEffect(() => {
+        if (!session?.access_token) return;
+
+        async function loadAll() {
+          const [
+            { data: tk },
+            { data: cl },
+            { data: mb },
+            { data: tt },
+            { data: sl },
+          ] = await Promise.all([
+            sb.from("tasks").select("*").order("created_at", { ascending:false }),
+            sb.from("clients").select("*").order("name"),
+            sb.from("profiles").select("*").order("name"),
+            sb.from("task_types").select("*").order("name"),
+            sb.from("sla_config").select("*"),
+          ]);
+
+          if (tk) setTasks(tk);
+          if (cl) setCls(cl);
+          if (mb) {
+            setMbs(mb);
+            const me = mb.find(x => x.id === session.user?.id) || mb.find(x => x.email === session.user?.email);
+            if (me) setCurrentUser(me);
+          }
+          if (tt) setTaskTypes(tt);
+          if (sl) setSla(Object.fromEntries(sl.map(x => [x.priority, x.days])));
+          setLoaded(true);
+        }
+
+        loadAll();
+      }, [session?.access_token]);
+
+      useEffect(() => {
+        localStorage.setItem("gc-theme", theme);
+      }, [theme]);
+
+      const hSave = async (f) => {
+        const payload = {
+          title:f.title,
+          description:f.description || "",
+          column:f.column,
+          client_id:f.client_id || null,
+          priority:f.priority,
+          assignee_id:f.assignee_id || null,
+          requester_id:f.requester_id || null,
+          task_type:f.task_type || null,
+          deadline:f.deadline || null,
+        };
+
+        if (f.id) {
+          const { data } = await sb.from("tasks").update(payload).eq("id", f.id).select().single();
+          if (data) setTasks(p => p.map(x => x.id === f.id ? { ...x, ...data } : x));
+        } else {
+          const { data } = await sb.from("tasks").insert(payload).select().single();
+          if (data) setTasks(p => [data, ...p]);
+        }
+      };
+
+      const hDrop = async (tid, col) => {
+        setTasks(p => p.map(x => x.id===tid ? { ...x, column:col } : x));
+        await sb.from("tasks").update({ column: col }).eq("id", tid);
+      };
+
+      const hDel = async (id) => {
+        setTasks(p => p.filter(x => x.id !== id));
+        await sb.from("tasks").delete().eq("id", id);
+      };
+
+      const hNC = async (c) => {
+        await sb.from("clients").upsert({ id:c.id, name:c.name, color:c.color });
+        setCls(p => [...p.filter(x => x.id!==c.id), c]);
+      };
+
+      const activeCols = flt.cols || COLUMNS.map(c=>c.id);
+
+      const filtered = useMemo(() => tasks.filter(x => {
+        if (!activeCols.includes(x.column)) return false;
+        const cid = x.client_id || x.client;
+        if (flt.client && cid !== flt.client) return false;
+        if (flt.priority && x.priority !== flt.priority) return false;
+        const aid = x.assignee_id || x.assignee;
+        if (flt.assignee && aid !== flt.assignee) return false;
+        if (flt.search && !x.title.toLowerCase().includes(flt.search.toLowerCase())) return false;
+        if (flt.sla) {
+          const si = getSlaInfo(x, sla);
+          if (flt.sla==="late" && si.status!=="late") return false;
+          if (flt.sla==="soon" && si.status!=="today" && si.status!=="soon") return false;
+          if (flt.sla==="ok" && si.status!=="ok") return false;
+        }
+        return true;
+      }), [tasks, flt, sla, activeCols]);
+
+      const lateCount = tasks.filter(x => getSlaInfo(x, sla).status==="late").length;
+
+      const nT = () => {
+        const td = new Date().toISOString().slice(0,10);
+        setMdl({
+          title:"",
+          column:"pendente",
+          client_id:cls[0]?.id || "",
+          priority:"media",
+          assignee_id:currentUser?.id || "",
+          requester_id:currentUser?.id || "",
+          description:"",
+          deadline:calcDeadline(td, "media", sla),
+          task_type:""
+        });
+      };
+
+      const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer" };
+
+      if (authLoading) {
+        return (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, color:t.text }}>
+            <span className="spin" style={{ fontSize:28 }}>⟳</span>
+          </div>
+        );
       }
 
-      if (!session || !session.access_token) {
-        return <Login onLoggedIn={() => window.location.reload()} />;
+      if (!session?.access_token) {
+        return <LoginScreen t={t} onLoggedIn={async () => {
+          const { data: { session: nextSession } } = await sb.auth.getSession();
+          setSession(nextSession);
+        }} />;
+      }
+
+      if (!loaded) {
+        return (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, color:t.text, gap:10 }}>
+            <span className="spin" style={{ fontSize:20 }}>⟳</span>
+            <span style={{ fontSize:14, color:t.mut }}>Carregando dados...</span>
+          </div>
+        );
       }
 
       return (
-        <div className="wrap">
-          <h1>App carregou com sucesso ✅</h1>
-          <div>Seu GitHub Pages está funcionando.</div>
-          <button
-            onClick={async () => {
-              await sb.auth.signOut();
-              window.location.reload();
-            }}
-          >
-            Sair
-          </button>
+        <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:t.bg, minHeight:"100vh", color:t.text }}>
+          <div style={{ padding:"10px 16px", borderBottom:"1px solid " + t.brd, background:t.navBg, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", position:"sticky", top:0, zIndex:100 }}>
+            <img src={LOGO} alt="GlobalCad" style={{ height:34, objectFit:"contain" }} />
+
+            <div style={{ fontSize:10, color:t.mut, fontWeight:600, textTransform:"uppercase", borderLeft:"1px solid " + t.brd, paddingLeft:12 }}>
+              Gestão de Tarefas
+            </div>
+
+            {lateCount > 0 && (
+              <span onClick={()=>setFlt(p=>({...p,sla:"late"}))} style={{
+                background:"#FF475722", color:"#FF4757", fontSize:11, fontWeight:700,
+                padding:"4px 10px", borderRadius:20, cursor:"pointer"
+              }}>
+                🔴 {lateCount} atrasada{lateCount>1?"s":""}
+              </span>
+            )}
+
+            <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+              <button onClick={()=>setShowSla(!showSla)} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid " + t.brd}}>⏱ SLA</button>
+              <button onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:16}}>{theme==="dark"?"☀":"🌙"}</button>
+              <button onClick={()=>setShowSettings(true)} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:14}}>⚙️</button>
+
+              {["kanban","table"].map(v => (
+                <button
+                  key={v}
+                  onClick={()=>setView(v)}
+                  style={{
+                    ...bS, padding:"6px 12px", fontSize:11, fontWeight:700, textTransform:"uppercase",
+                    background:view===v ? "#0984E3" : t.colBg,
+                    color:view===v ? "#fff" : t.mut
+                  }}
+                >
+                  {v==="kanban" ? "⊞ Quadro" : "☰ Grade"}
+                </button>
+              ))}
+
+              <button onClick={nT} style={{...bS, padding:"8px 14px", background:"#0984E3", color:"#fff", fontWeight:700, fontSize:12}}>
+                + Nova Tarefa
+              </button>
+
+              <button onClick={async ()=>{
+                await sb.auth.signOut();
+                setSession(null);
+              }} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid " + t.brd}}>
+                Sair
+              </button>
+
+              <div style={{ display:"flex", alignItems:"center", gap:8, paddingLeft:8, borderLeft:"1px solid " + t.brd }}>
+                <Av m={currentUser?.id} mbs={mbs} sz={30} />
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.text, lineHeight:1.2 }}>{currentUser?.name || "Você"}</div>
+                  <div style={{ fontSize:10, color:t.mut, lineHeight:1 }}>{ROLE_LABELS[currentUser?.role] || "Membro"}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {showSla && (
+            <div style={{ padding:"12px 16px", borderBottom:"1px solid " + t.brd, background:t.colBg }}>
+              <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+                <span style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase" }}>SLA (dias):</span>
+                {PRIORITIES.map(p => (
+                  <div key={p.id} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ fontSize:12, color:p.color, fontWeight:600 }}>{p.icon} {p.name}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={sla[p.id]||""}
+                      onChange={e=>setSla(s=>({...s,[p.id]:parseInt(e.target.value)||0}))}
+                      style={{ padding:"6px 10px", borderRadius:8, border:"1px solid " + t.brd, background:t.inp, color:t.text, fontSize:13, outline:"none", width:60, textAlign:"center" }}
+                    />
+                    <span style={{ fontSize:10, color:t.mut }}>dias</span>
+                  </div>
+                ))}
+                <button
+                  onClick={async ()=>{
+                    await Promise.all(PRIORITIES.map(p=>sb.from("sla_config").update({days:sla[p.id]}).eq("priority", p.id)));
+                    setShowSla(false);
+                  }}
+                  style={{...bS, padding:"6px 14px", background:"#0984E3", color:"#fff", fontWeight:700, fontSize:12}}
+                >
+                  Salvar
+                </button>
+                <button onClick={()=>setShowSla(false)} style={{...bS, padding:"4px 12px", background:t.card, color:t.mut, fontSize:11}}>Fechar</button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ padding:"10px 16px" }}>
+            <Filters filters={flt} setF={setFlt} cls={cls} mbs={mbs} t={t} tasks={tasks} />
+          </div>
+
+          {view==="kanban" ? (
+            <div style={{ padding:"0 16px 80px", display:"flex", gap:10, overflowX:"auto" }}>
+              {COLUMNS.filter(col=>activeCols.includes(col.id)).map(col => (
+                <Col
+                  key={col.id}
+                  col={col}
+                  tasks={filtered.filter(x=>x.column===col.id)}
+                  onEdit={setMdl}
+                  onDrop={hDrop}
+                  cls={cls}
+                  mbs={mbs}
+                  t={t}
+                  sla={sla}
+                  taskTypes={taskTypes}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding:"0 16px 80px", overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                <thead>
+                  <tr style={{ borderBottom:"2px solid " + t.brd }}>
+                    {["Tarefa","Tipo","Cliente","Status","Prioridade","Prazo","SLA","Responsável"].map(h => (
+                      <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontWeight:800, fontSize:11, color:t.mut, textTransform:"uppercase" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(tk => {
+                    const col = COLUMNS.find(c=>c.id===tk.column);
+                    const tt = taskTypes.find(x=>x.id===tk.task_type);
+                    const dl = tk.deadline || calcDeadline(String(tk.created_at||"").slice(0,10), tk.priority, sla);
+
+                    return (
+                      <tr key={tk.id} onClick={()=>setMdl(tk)} style={{ borderBottom:"1px solid " + t.brd, cursor:"pointer" }}>
+                        <td style={{ padding:"10px 12px", fontWeight:600 }}>{tk.title}</td>
+                        <td style={{ padding:"10px 12px", fontSize:11, color:t.mut }}>{tt ? `${tt.icon} ${tt.name}` : "—"}</td>
+                        <td style={{ padding:"10px 12px" }}><Bg c={tk.client_id||tk.client} cls={cls} /></td>
+                        <td style={{ padding:"10px 12px" }}><span style={{ color:col?.accent, fontSize:12, fontWeight:600 }}>{col?.icon} {col?.name}</span></td>
+                        <td style={{ padding:"10px 12px" }}><Pd pid={tk.priority} /> {PRIORITIES.find(p=>p.id===tk.priority)?.name}</td>
+                        <td style={{ padding:"10px 12px", fontFamily:"monospace", fontSize:11, color:t.mut }}>{dl||"—"}</td>
+                        <td style={{ padding:"10px 12px" }}><SlaTag task={tk} sla={sla} /></td>
+                        <td style={{ padding:"10px 12px" }}><Av m={tk.assignee_id||tk.assignee} mbs={mbs} sz={24} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {filtered.length===0 && (
+                <div style={{ textAlign:"center", padding:"48px 0", color:t.mut }}>
+                  <div style={{ fontSize:32 }}>📋</div>
+                  <div style={{ fontSize:14, marginTop:8 }}>Nenhuma tarefa encontrada</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{
+            position:"fixed", bottom:0, left:0, right:0, background:t.navBg, borderTop:"1px solid " + t.brd,
+            padding:"7px 16px", display:"flex", gap:16, fontSize:11, color:t.mut, fontWeight:600, flexWrap:"wrap", zIndex:10
+          }}>
+            {COLUMNS.map(col => (
+              <span key={col.id} style={{ color:col.accent }}>{col.icon} {col.name}: {tasks.filter(x=>x.column===col.id).length}</span>
+            ))}
+            <span style={{ marginLeft:"auto" }}>Total: {tasks.length} tarefas</span>
+          </div>
+
+          {mdl && (
+            <TaskModal
+              task={mdl}
+              onSave={hSave}
+              onDel={hDel}
+              onClose={()=>setMdl(null)}
+              cls={cls}
+              mbs={mbs}
+              t={t}
+              onNC={hNC}
+              sla={sla}
+              taskTypes={taskTypes}
+              currentUser={currentUser}
+            />
+          )}
+
+          {showSettings && (
+            <SettingsModal
+              onClose={()=>setShowSettings(false)}
+              cls={cls}
+              setCls={setCls}
+              mbs={mbs}
+              setMbs={setMbs}
+              taskTypes={taskTypes}
+              setTaskTypes={setTaskTypes}
+              t={t}
+              currentUser={currentUser}
+            />
+          )}
         </div>
       );
     }
