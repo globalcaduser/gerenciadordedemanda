@@ -1195,13 +1195,16 @@ function ResetPasswordScreen({ t, onDone }) {
               {v==="kanban"?"⊞ Quadro":"☰ Grade"}
             </button>
           ))}
-          <button onClick={nT} style={{...bS,padding:"8px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}>+ Nova Tarefa</button>
-          <button
-            onClick={() => sb.auth.signOut()}
-            style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid "+t.brd}}
->
-            Sair
-          </button>
+         <button onClick={nT} style={{...bS,padding:"8px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}>
+           + Nova Tarefa
+         </button>
+
+         <button
+           onClick={() => sb.auth.signOut()}
+           style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid "+t.brd}}
+         >
+           Sair
+         </button>
           {/* Avatar do usuário logado */}
           <div style={{ display:"flex", alignItems:"center", gap:8, paddingLeft:8, borderLeft:"1px solid "+t.brd }}>
             <Av m={currentUser?.id} mbs={mbs} sz={30}/>
