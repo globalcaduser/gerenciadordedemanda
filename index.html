@@ -608,9 +608,11 @@
           });
 
           const data = await res.json();
+          
+          console.log("RESPOSTA:", data);
 
           if (!res.ok) {
-            setMsgUser("Erro: " + data.error);
+            setMsgUser("Erro: " + (data?.error || JSON.stringify(data)));
             return;
           }
 
