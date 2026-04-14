@@ -1026,7 +1026,11 @@ function ResetPasswordScreen({ t, onDone }) {
 
     if (data?.type === "recovery") {
       setRecoveryMode(true);
-      setSession(data.session);
+    if (sessionData.session && sessionData.session.user) {
+  setSession(sessionData.session);
+} else {
+  setSession(null);
+}
       setAuthLoading(false);
       return;
     }
@@ -1179,7 +1183,9 @@ function ResetPasswordScreen({ t, onDone }) {
     sb.auth.signOut();
   }} />;
 }
-  if (!session) return <LoginScreen t={t}/>;
+  if (!session || !session.user) {
+  return <LoginScreen t={t} />;
+}
 
   if (!loaded) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:t.bg, color:t.text, fontFamily:"'DM Sans',sans-serif", gap:10 }}>
