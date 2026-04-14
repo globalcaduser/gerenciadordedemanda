@@ -42,7 +42,7 @@
     const _listeners = [];
 
     async function fetchSupabaseUser(token) {
-      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      const r = await fetch("https://koetobzvkdohtmckugov.supabase.co/functions/v1/create-user", {
         headers: sbHeaders(token),
       });
       if (!r.ok) return null;
