@@ -1186,7 +1186,7 @@ function ResetPasswordScreen({ t, onDone }) {
           </span>
         )}
 
-        <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
           <button onClick={()=>setShowSla(!showSla)} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:11,fontWeight:700,border:"1px solid "+t.brd}} title="Configurar SLA">⏱ SLA</button>
           <button onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:16}} title="Tema">{theme==="dark"?"☀":"🌙"}</button>
           <button onClick={()=>setShowSettings(true)} style={{...bS,padding:"6px 11px",background:t.colBg,color:t.mut,fontSize:14}} title="Configurações">⚙️</button>
@@ -1196,7 +1196,12 @@ function ResetPasswordScreen({ t, onDone }) {
             </button>
           ))}
           <button onClick={nT} style={{...bS,padding:"8px 14px",background:"#0984E3",color:"#fff",fontWeight:700,fontSize:12}}>+ Nova Tarefa</button>
-
+          <button
+            onClick={() => sb.auth.signOut()}
+            style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid "+t.brd}}
+>
+            Sair
+          </button>
           {/* Avatar do usuário logado */}
           <div style={{ display:"flex", alignItems:"center", gap:8, paddingLeft:8, borderLeft:"1px solid "+t.brd }}>
             <Av m={currentUser?.id} mbs={mbs} sz={30}/>
