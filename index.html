@@ -1016,41 +1016,15 @@ function ResetPasswordScreen({ t, onDone }) {
   const t = TH[theme];
 
   // ── Autenticação ─────────────────────────────────────────────
-  useEffect(() => {
-  async function initAuth() {
-    const { data, error } = await sb.auth.setSessionFromUrl();
-
-    if (error) {
-      console.error("Erro no link de autenticação:", error.message);
-    }
-
-    if (data?.type === "recovery") {
-      setRecoveryMode(true);
-    if (sessionData.session && sessionData.session.user) {
-  setSession(sessionData.session);
-} else {
-  setSession(null);
-}
-      setAuthLoading(false);
-      return;
-    }
-
-    const { data: sessionData } = await sb.auth.getSession();
-    setSession(sessionData.session);
-    setAuthLoading(false);
-  }
-
-  initAuth();
-
-  sb.auth.onAuthStateChange((event, session) => {
+  useEffect(() => 
+ sb.auth.getSession().then(({ data: { session } }) => {
+  if (session && session.access_token) {
     setSession(session);
-    if (!session) {
-      setCurrentUser(null);
-      setLoaded(false);
-      setTasks([]);
-    }
-  });
-}, []);
+  } else {
+    setSession(null);
+  }
+  setAuthLoading(false);
+});
 
   // ── Carregamento dos dados ────────────────────────────────────
   useEffect(() => {
@@ -1183,7 +1157,7 @@ function ResetPasswordScreen({ t, onDone }) {
     sb.auth.signOut();
   }} />;
 }
-  if (!session || !session.user) {
+  if (!session || !session.access_token) {
   return <LoginScreen t={t} />;
 }
 
