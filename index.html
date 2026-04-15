@@ -774,6 +774,24 @@
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Membros da equipe ({mbs.length})</div>
                   {mbs.map(m => (
+                   const disableRoleChange = m.id === currentUser?.id && m.role === "admin";
+
+                   return (
+                     <div key={m.id}>
+                       <span>{m.name}</span>
+
+                       <select
+                         value={m.role || "member"}
+                         disabled={disableRoleChange}
+                         onChange={e => updateRole(m.id, e.target.value)}
+                       >
+                        <option value="member">👤 Membro</option>
+                        <option value="manager">👔 Gerente</option>
+                        <option value="admin">🔑 Admin</option>
+                      </select>
+                    </div>
+                  );
+                })}
                     <Row key={m.id}>
                       {editMb?.id===m.id ? (
                         <>
