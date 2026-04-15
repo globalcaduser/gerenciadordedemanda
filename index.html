@@ -612,7 +612,7 @@
           console.log("RESPOSTA:", data);
 
           if (!res.ok) {
-            setMsgUser("Erro: " + (data?.error || JSON.stringify(data)));
+            setMsgUser("Erro: " + (data?.error || data?.detail || JSON.stringify(data)));
             return;
           }
 
@@ -911,7 +911,12 @@
                         <div style={{ fontSize:13, fontWeight:600, color:t.text }}>{m.name}</div>
                         <div style={{ fontSize:10, color:t.mut }}>{m.email}</div>
                       </div>
-                      <select value={m.role||"member"} onChange={e=>updateRole(m.id, e.target.value)} style={{...iS, width:"auto", padding:"4px 8px"}}>
+                      const disableRoleChange = m.id === currentUser?.id && m.role === "admin";
+                      <select 
+                        value={m.role || "member"}
+                        disabled={disableRoleChange}
+                        onChange={e => updateRole(m.id, e.target.value)}
+                      >
                         <option value="member">👤 Membro</option>
                         <option value="manager">👔 Gerente</option>
                         <option value="admin">🔑 Admin</option>
