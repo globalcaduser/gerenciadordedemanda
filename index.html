@@ -29,6 +29,9 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
+    /* =========================
+       CONFIG
+    ========================= */
     const SUPABASE_URL = "https://koetobzvkdohtmckugov.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_uhoJre1bAFZEbnZlCV05Lg_CO9Ta77J";
 
@@ -42,7 +45,7 @@
     const _listeners = [];
 
     async function fetchSupabaseUser(token) {
-      const r = await fetch("https://koetobzvkdohtmckugov.supabase.co/functions/v1/create-user", {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
         headers: sbHeaders(token),
       });
       if (!r.ok) return null;
@@ -194,6 +197,9 @@
       }
     }
 
+    /* =========================
+       UI / CONSTANTES
+    ========================= */
     const TH = {
       dark: {
         bg:"#0F1117", card:"#1A1D27", colBg:"#14161E", colH:"#1C1F2A",
@@ -294,6 +300,9 @@
       return <span style={{ fontSize:13, color:p.color }}>{p.icon}</span>;
     }
 
+    /* =========================
+       LOGIN
+    ========================= */
     function LoginScreen({ t, onLoggedIn }) {
       const [email, setEmail] = useState("");
       const [pass, setPass] = useState("");
@@ -359,6 +368,9 @@
       );
     }
 
+    /* =========================
+       QUADRO
+    ========================= */
     function Card({ task, onEdit, cls, mbs, t, sla, taskTypes }) {
       const p = PRIORITIES.find(x => x.id === task.priority);
       const si = getSlaInfo(task, sla);
@@ -427,6 +439,9 @@
       );
     }
 
+    /* =========================
+       MODAL TAREFA
+    ========================= */
     function TaskModal({ task, onSave, onDel, onClose, cls, mbs, t, onNC, sla, taskTypes, currentUser }) {
       const isNew = !task.id;
       const today = new Date().toISOString().slice(0,10);
@@ -452,10 +467,7 @@
       const [snc, setSnc] = useState(false);
       const [nc, setNc] = useState({ name:"", color:PCOLORS[Math.floor(Math.random()*PCOLORS.length)] });
 
-      const set = (k, v) => sF(p => {
-        const nf = { ...p, [k]:v };
-        return nf;
-      });
+      const set = (k, v) => sF(p => ({ ...p, [k]:v }));
 
       const handleSave = async () => {
         if (!f.title.trim()) return;
@@ -583,52 +595,13 @@
       );
     }
 
+    /* =========================
+       CONFIGURAÇÕES + CRIAR USUÁRIO
+    ========================= */
     function SettingsModal({ onClose, cls, setCls, mbs, setMbs, taskTypes, setTaskTypes, t, currentUser }) {
       const isAdmin = currentUser?.role === "admin";
       const isManager = currentUser?.role === "manager" || isAdmin;
-      const [newUser, setNewUser] = useState({
-         email: "",
-         password: "",
-         name: ""
-       });
-      const createUserFromApp = async () => {
-        try {
-          setMsgUser("Criando usuário...");
 
-          const token = _session?.access_token;
-
-          const res = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
-            method: "POST",
-            headers: {
-               "Content-Type": "application/json",
-               "apikey": SUPABASE_ANON_KEY,
-               "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify(newUser)
-          });
-
-          const data = await res.json();
-          
-          console.log("RESPOSTA:", data);
-
-          if (!res.ok) {
-            setMsgUser("Erro: " + (data?.error || data?.detail || JSON.stringify(data)));
-            return;
-          }
-
-          setMsgUser("Usuário criado com sucesso ✅");
-
-          setNewUser({
-            email: "",
-            password: "",
-            name: ""
-          });
-
-        } catch (e) {
-          setMsgUser("Erro: " + e.message);
-        }
-      };
-      const [msgUser, setMsgUser] = useState("");
       const tabs = [
         { id:"clients", label:"🏢 Clientes", show:true },
         { id:"members", label:"👤 Equipe", show:true },
@@ -642,6 +615,16 @@
       const [editMb, setEditMb] = useState(null);
       const [editTt, setEditTt] = useState(null);
       const [newTt, setNewTt] = useState({ name:"", icon:"📋" });
+
+      const [newUser, setNewUser] = useState({
+        email: "",
+        password: "",
+        name: "",
+        initials: "",
+        role: "member",
+        color: "#0984E3"
+      });
+      const [msgUser, setMsgUser] = useState("");
 
       const iS = {
         padding:"8px 10px", borderRadius:6, border:"1px solid " + t.brd,
@@ -703,13 +686,59 @@
         setMbs(p => p.map(x => x.id === userId ? { ...x, role } : x));
       };
 
+      const createUserFromApp = async () => {
+        try {
+          setMsgUser("Criando usuário...");
+
+          const token = _session?.access_token;
+          if (!token) {
+            setMsgUser("Erro: sessão inválida");
+            return;
+          }
+
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(newUser)
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            setMsgUser("Erro: " + (data?.error || data?.detail || JSON.stringify(data)));
+            return;
+          }
+
+          setMsgUser("Usuário criado com sucesso ✅");
+
+          if (data?.profile) {
+            setMbs(p => [...p, data.profile]);
+          }
+
+          setNewUser({
+            email: "",
+            password: "",
+            name: "",
+            initials: "",
+            role: "member",
+            color: "#0984E3"
+          });
+        } catch (e) {
+          setMsgUser("Erro: " + e.message);
+        }
+      };
+
       return (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div className="fade-in" style={{ background:t.card, borderRadius:16, width:"100%", maxWidth:560, maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
             <div style={{ padding:"18px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <div>
                 <div style={{ fontSize:16, fontWeight:800, color:t.text }}>⚙️ Configurações</div>
-                <div style={{ fontSize:11, color:t.mut, marginTop:2 }}>Gerencie clientes, equipe e tipos de tarefa</div>
+                <div style={{ fontSize:11, color:t.mut, marginTop:2 }}>Gerencie clientes, equipe, tipos e usuários</div>
               </div>
               <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:t.mut }}>×</button>
             </div>
@@ -774,24 +803,6 @@
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>Membros da equipe ({mbs.length})</div>
                   {mbs.map(m => (
-                   const disableRoleChange = m.id === currentUser?.id && m.role === "admin";
-
-                   return (
-                     <div key={m.id}>
-                       <span>{m.name}</span>
-
-                       <select
-                         value={m.role || "member"}
-                         disabled={disableRoleChange}
-                         onChange={e => updateRole(m.id, e.target.value)}
-                       >
-                        <option value="member">👤 Membro</option>
-                        <option value="manager">👔 Gerente</option>
-                        <option value="admin">🔑 Admin</option>
-                      </select>
-                    </div>
-                  );
-                })}
                     <Row key={m.id}>
                       {editMb?.id===m.id ? (
                         <>
@@ -858,14 +869,46 @@
 
               {tab==="users" && isAdmin && (
                 <div>
-                <div style={{
-                   marginTop:20,
-                   padding:14,
-                   background:t.colBg,
-                   borderRadius:8,
-                   border:"1px dashed " + t.brd
-                 }}>
-                   <div style={{
+                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>
+                    Controle de acesso ({mbs.length} usuários)
+                  </div>
+
+                  {mbs.map(m => {
+                    const disableRoleChange = m.id === currentUser?.id && m.role === "admin";
+
+                    return (
+                      <Row key={m.id}>
+                        <div style={{ width:30, height:30, borderRadius:"50%", background:m.color || "#0984E3", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", flexShrink:0 }}>
+                          {m.initials || m.name?.slice(0,2)}
+                        </div>
+
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:t.text }}>{m.name}</div>
+                          <div style={{ fontSize:10, color:t.mut }}>{m.email}</div>
+                        </div>
+
+                        <select
+                          value={m.role || "member"}
+                          disabled={disableRoleChange}
+                          onChange={e=>updateRole(m.id, e.target.value)}
+                          style={{...iS, width:"auto", padding:"4px 8px"}}
+                        >
+                          <option value="member">👤 Membro</option>
+                          <option value="manager">👔 Gerente</option>
+                          <option value="admin">🔑 Admin</option>
+                        </select>
+                      </Row>
+                    );
+                  })}
+
+                  <div style={{
+                    marginTop:20,
+                    padding:14,
+                    background:t.colBg,
+                    borderRadius:8,
+                    border:"1px dashed " + t.brd
+                  }}>
+                    <div style={{
                       fontSize:11,
                       fontWeight:700,
                       color:t.mut,
@@ -881,66 +924,65 @@
                         value={newUser.email}
                         onChange={e=>setNewUser(p=>({...p,email:e.target.value}))}
                         style={iS}
-                     />
+                      />
 
-                     <input
-                       placeholder="Senha"
-                       value={newUser.password}
-                       onChange={e=>setNewUser(p=>({...p,password:e.target.value}))}
-                       style={iS}
-                     />
+                      <input
+                        placeholder="Senha inicial"
+                        value={newUser.password}
+                        onChange={e=>setNewUser(p=>({...p,password:e.target.value}))}
+                        style={iS}
+                      />
 
-                     <input
-                      placeholder="Nome"
-                      value={newUser.name}
-                      onChange={e=>setNewUser(p=>({...p,name:e.target.value}))}
-                      style={iS}
-                     />
+                      <input
+                        placeholder="Nome"
+                        value={newUser.name}
+                        onChange={e=>setNewUser(p=>({...p,name:e.target.value}))}
+                        style={iS}
+                      />
 
-                     <button
-                       onClick={createUserFromApp}
-                       style={{
-                         padding:10,
-                         borderRadius:8,
-                         background:"#0984E3",
-                         color:"#fff",
-                         border:"none",
-                         fontWeight:700
-                       }}
-                     >
-                       Criar usuário
-                     </button>
+                      <input
+                        placeholder="Iniciais"
+                        value={newUser.initials}
+                        onChange={e=>setNewUser(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))}
+                        style={iS}
+                      />
 
-                     <div style={{ fontSize:12, color:t.mut }}>
-                       {msgUser}
-                     </div>
-                   </div>
-                 </div>
-               )}
-                  <div style={{ fontSize:11, fontWeight:700, color:t.mut, textTransform:"uppercase", marginBottom:10 }}>
-                    Controle de acesso ({mbs.length} usuários)
-                  </div>
-                  {mbs.map(m => (
-                    <Row key={m.id}>
-                      <div style={{ width:30, height:30, borderRadius:"50%", background:m.color || "#0984E3", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", flexShrink:0 }}>
-                        {m.initials || m.name?.slice(0,2)}
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:13, fontWeight:600, color:t.text }}>{m.name}</div>
-                        <div style={{ fontSize:10, color:t.mut }}>{m.email}</div>
-                      </div>
-                      const disableRoleChange = m.id === currentUser?.id && m.role === "admin";
-                      <select 
-                        value={m.role || "member"}
-                        disabled={disableRoleChange}
-                        onChange={e => updateRole(m.id, e.target.value)}
+                      <select
+                        value={newUser.role}
+                        onChange={e=>setNewUser(p=>({...p,role:e.target.value}))}
+                        style={iS}
                       >
                         <option value="member">👤 Membro</option>
                         <option value="manager">👔 Gerente</option>
                         <option value="admin">🔑 Admin</option>
                       </select>
-                    </Row>
-                  ))}
+
+                      <input
+                        type="color"
+                        value={newUser.color}
+                        onChange={e=>setNewUser(p=>({...p,color:e.target.value}))}
+                        style={{ width:48, height:36, border:"none", padding:0 }}
+                      />
+
+                      <button
+                        onClick={createUserFromApp}
+                        style={{
+                          padding:10,
+                          borderRadius:8,
+                          background:"#0984E3",
+                          color:"#fff",
+                          border:"none",
+                          fontWeight:700
+                        }}
+                      >
+                        Criar usuário
+                      </button>
+
+                      <div style={{ fontSize:12, color:t.mut }}>
+                        {msgUser}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -953,6 +995,9 @@
       );
     }
 
+    /* =========================
+       FILTROS
+    ========================= */
     function Filters({ filters, setF, cls, mbs, t, tasks }) {
       const s = {
         padding:"6px 10px", borderRadius:8, border:"1px solid " + t.brd,
@@ -1029,6 +1074,9 @@
       );
     }
 
+    /* =========================
+       APP
+    ========================= */
     function App() {
       const [session, setSession] = useState(null);
       const [authLoading, setAuthLoading] = useState(true);
