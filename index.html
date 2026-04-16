@@ -6,11 +6,9 @@
   <title>GlobalCad — Gestão de Tarefas</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📋</text></svg>">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
@@ -29,9 +27,6 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    /* =========================
-       CONFIG
-    ========================= */
     const SUPABASE_URL = "https://koetobzvkdohtmckugov.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_uhoJre1bAFZEbnZlCV05Lg_CO9Ta77J";
 
@@ -197,9 +192,6 @@
       }
     }
 
-    /* =========================
-       UI / CONSTANTES
-    ========================= */
     const TH = {
       dark: {
         bg:"#0F1117", card:"#1A1D27", colBg:"#14161E", colH:"#1C1F2A",
@@ -226,84 +218,68 @@
 
     const ROLE_LABELS = { admin:"🔑 Admin", manager:"👔 Gerente", member:"👤 Membro" };
     const PCOLORS = ["#6C5CE7","#00B894","#E17055","#D63031","#0984E3","#FDCB6E","#00CEC9","#A29BFE","#E84393","#FF9800"];
+
     const DEFAULT_CLIENTS = [
-  { id:"delta", name:"DELTA", color:"#0984E3" },
-  { id:"enep", name:"ENEP", color:"#00B894" },
-  { id:"engedata", name:"ENGEDATA", color:"#E17055" },
-  { id:"florecer", name:"FLORECER", color:"#6C5CE7" },
-];
+      { id:"delta", name:"DELTA", color:"#0984E3" },
+      { id:"enep", name:"ENEP", color:"#00B894" },
+      { id:"engedata", name:"ENGEDATA", color:"#E17055" },
+      { id:"florecer", name:"FLORECER", color:"#6C5CE7" },
+    ];
 
-const DEFAULT_MEMBERS = [
-  { id:"leandro", name:"Leandro Vettori", initials:"LV", color:"#00B894", role:"admin", email:"leandro.vettori@globalcad.com.br" },
-  { id:"bruno", name:"Bruno Neves", initials:"BN", color:"#0984E3", role:"member" },
-  { id:"gabriel", name:"Gabriel Nazareth", initials:"GN", color:"#E17055", role:"member" },
-];
+    const DEFAULT_MEMBERS = [
+      { id:"leandro", name:"Leandro Vettori", initials:"LV", color:"#00B894", role:"admin", email:"leandro.vettori@globalcad.com.br" },
+      { id:"bruno", name:"Bruno Neves", initials:"BN", color:"#0984E3", role:"member" },
+      { id:"gabriel", name:"Gabriel Nazareth", initials:"GN", color:"#E17055", role:"member" },
+    ];
 
-const DEFAULT_TASK_TYPES = [
-  { id:"reuniao", name:"Reunião Implantação", icon:"🤝" },
-  { id:"execucao", name:"Execução Implantação", icon:"⚙️" },
-  { id:"liberacao", name:"Liberação para Operação", icon:"🚀" },
-];
+    const DEFAULT_TASK_TYPES = [
+      { id:"reuniao", name:"Reunião Implantação", icon:"🤝" },
+      { id:"execucao", name:"Execução Implantação", icon:"⚙️" },
+      { id:"liberacao", name:"Liberação para Operação", icon:"🚀" },
+    ];
 
-const SAMPLE_TASKS = [
-  {
-    id: "sample-1",
-    title: "Reunião Implantação — DELTA",
-    description: "",
-    column: "pendente",
-    client_id: "delta",
-    priority: "media",
-    assignee_id: "leandro",
-    requester_id: "leandro",
-    task_type: "reuniao",
-    created_at: "2026-04-01",
-    deadline: "2026-04-11"
-  },
-  {
-    id: "sample-2",
-    title: "Execução Implantação — ENEP",
-    description: "",
-    column: "andamento",
-    client_id: "enep",
-    priority: "importante",
-    assignee_id: "bruno",
-    requester_id: "leandro",
-    task_type: "execucao",
-    created_at: "2026-04-02",
-    deadline: "2026-04-07"
-  },
-  {
-    id: "sample-3",
-    title: "Liberação para Operação — ENGEDATA",
-    description: "",
-    column: "concluido",
-    client_id: "engedata",
-    priority: "urgente",
-    assignee_id: "gabriel",
-    requester_id: "leandro",
-    task_type: "liberacao",
-    created_at: "2026-04-03",
-    deadline: "2026-04-05"
-  }
-];
+    const SAMPLE_TASKS = [
+      {
+        id: "sample-1",
+        title: "Reunião Implantação — DELTA",
+        description: "",
+        column: "pendente",
+        client_id: "delta",
+        priority: "media",
+        assignee_id: "leandro",
+        requester_id: "leandro",
+        task_type: "reuniao",
+        created_at: "2026-04-01",
+        deadline: "2026-04-11"
+      },
+      {
+        id: "sample-2",
+        title: "Execução Implantação — ENEP",
+        description: "",
+        column: "andamento",
+        client_id: "enep",
+        priority: "importante",
+        assignee_id: "bruno",
+        requester_id: "leandro",
+        task_type: "execucao",
+        created_at: "2026-04-02",
+        deadline: "2026-04-07"
+      },
+      {
+        id: "sample-3",
+        title: "Liberação para Operação — ENGEDATA",
+        description: "",
+        column: "concluido",
+        client_id: "engedata",
+        priority: "urgente",
+        assignee_id: "gabriel",
+        requester_id: "leandro",
+        task_type: "liberacao",
+        created_at: "2026-04-03",
+        deadline: "2026-04-05"
+      }
+    ];
 
-function normalizeTask(task, clients, members, sla) {
-  const validClient = clients.find(c => c.id === (task.client_id || task.client));
-  const validAssignee = members.find(m => m.id === (task.assignee_id || task.assignee));
-  const validRequester = members.find(m => m.id === (task.requester_id || task.requester));
-  const created = task.created_at || task.created || new Date().toISOString().slice(0,10);
-
-  return {
-    ...task,
-    column: COLUMNS.some(c => c.id === task.column) ? task.column : "pendente",
-    client_id: validClient?.id || clients[0]?.id || "",
-    assignee_id: validAssignee?.id || members[0]?.id || "",
-    requester_id: validRequester?.id || members[0]?.id || "",
-    task_type: task.task_type || task.taskType || "",
-    created_at: created,
-    deadline: task.deadline || calcDeadline(String(created).slice(0,10), task.priority || "media", sla),
-  };
-}
     const LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40">
         <rect width="180" height="40" rx="8" fill="#0F1117"/>
@@ -316,6 +292,24 @@ function normalizeTask(task, clients, members, sla) {
       const d = new Date(created + "T00:00:00");
       d.setDate(d.getDate() + (sla[priority] || 10));
       return d.toISOString().slice(0, 10);
+    }
+
+    function normalizeTask(task, clients, members, sla) {
+      const validClient = clients.find(c => c.id === (task.client_id || task.client));
+      const validAssignee = members.find(m => m.id === (task.assignee_id || task.assignee));
+      const validRequester = members.find(m => m.id === (task.requester_id || task.requester));
+      const created = task.created_at || task.created || new Date().toISOString().slice(0,10);
+
+      return {
+        ...task,
+        column: COLUMNS.some(c => c.id === task.column) ? task.column : "pendente",
+        client_id: validClient?.id || clients[0]?.id || "",
+        assignee_id: validAssignee?.id || members[0]?.id || "",
+        requester_id: validRequester?.id || members[0]?.id || "",
+        task_type: task.task_type || task.taskType || "",
+        created_at: created,
+        deadline: task.deadline || calcDeadline(String(created).slice(0,10), task.priority || "media", sla),
+      };
     }
 
     function getSlaInfo(task, sla) {
@@ -377,9 +371,6 @@ function normalizeTask(task, clients, members, sla) {
       return <span style={{ fontSize:13, color:p.color }}>{p.icon}</span>;
     }
 
-    /* =========================
-       LOGIN
-    ========================= */
     function LoginScreen({ t, onLoggedIn }) {
       const [email, setEmail] = useState("");
       const [pass, setPass] = useState("");
@@ -445,9 +436,6 @@ function normalizeTask(task, clients, members, sla) {
       );
     }
 
-    /* =========================
-       QUADRO
-    ========================= */
     function Card({ task, onEdit, cls, mbs, t, sla, taskTypes }) {
       const p = PRIORITIES.find(x => x.id === task.priority);
       const si = getSlaInfo(task, sla);
@@ -516,9 +504,6 @@ function normalizeTask(task, clients, members, sla) {
       );
     }
 
-    /* =========================
-       MODAL TAREFA
-    ========================= */
     function TaskModal({ task, onSave, onDel, onClose, cls, mbs, t, onNC, sla, taskTypes, currentUser }) {
       const isNew = !task.id;
       const today = new Date().toISOString().slice(0,10);
@@ -547,14 +532,17 @@ function normalizeTask(task, clients, members, sla) {
       const set = (k, v) => sF(p => ({ ...p, [k]:v }));
 
       const handleSave = async () => {
-         if (!f.title.trim()) return;
+        if (!f.title.trim()) {
+          alert("Informe o título da tarefa.");
+          return;
+        }
 
-         setSaving(true);
-         const ok = await onSave(f);
-         setSaving(false);
+        setSaving(true);
+        const ok = await onSave(f);
+        setSaving(false);
 
-         if (ok) onClose();
-       };
+        if (ok) onClose();
+      };
 
       const addClient = () => {
         if (!nc.name.trim()) return;
@@ -591,14 +579,14 @@ function normalizeTask(task, clients, members, sla) {
                     <option value="">Selecione...</option>
                     {cls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                  <button onClick={()=>setSnc(!snc)} style={{...bS, background:t.colBg, color:t.mut, border:"1px solid " + t.brd}}>+</button>
+                  <button type="button" onClick={()=>setSnc(!snc)} style={{...bS, background:t.colBg, color:t.mut, border:"1px solid " + t.brd}}>+</button>
                 </div>
 
                 {snc && (
                   <div style={{ marginTop:8, padding:12, background:t.colBg, borderRadius:8, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
                     <input value={nc.name} onChange={e=>setNc(p=>({...p,name:e.target.value}))} placeholder="Nome do cliente" style={{...iS, flex:"1 1 120px"}} />
                     <input type="color" value={nc.color} onChange={e=>setNc(p=>({...p,color:e.target.value}))} style={{ width:36, height:36, border:"none", padding:0 }} />
-                    <button onClick={addClient} style={{...bS, background:"#0984E3", color:"#fff"}}>Adicionar</button>
+                    <button type="button" onClick={addClient} style={{...bS, background:"#0984E3", color:"#fff"}}>Adicionar</button>
                   </div>
                 )}
               </div>
@@ -638,6 +626,7 @@ function normalizeTask(task, clients, members, sla) {
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {taskTypes.map(tt => (
                     <button
+                      type="button"
                       key={tt.id}
                       onClick={()=>set("task_type", f.task_type===tt.id ? "" : tt.id)}
                       style={{
@@ -663,9 +652,9 @@ function normalizeTask(task, clients, members, sla) {
             </div>
 
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end", flexWrap:"wrap" }}>
-              {!isNew && <button onClick={()=>{onDel(task.id); onClose();}} style={{...bS, background:"#FF767533", color:"#D63031"}}>Excluir</button>}
-              <button onClick={onClose} style={{...bS, background:t.colBg, color:t.mut}}>Cancelar</button>
-              <button onClick={handleSave} disabled={saving} style={{...bS, background:"#0984E3", color:"#fff", fontWeight:700}}>
+              {!isNew && <button type="button" onClick={()=>{onDel(task.id); onClose();}} style={{...bS, background:"#FF767533", color:"#D63031"}}>Excluir</button>}
+              <button type="button" onClick={onClose} style={{...bS, background:t.colBg, color:t.mut}}>Cancelar</button>
+              <button type="button" onClick={handleSave} disabled={saving} style={{...bS, background:"#0984E3", color:"#fff", fontWeight:700}}>
                 {saving ? "Salvando..." : "Salvar"}
               </button>
             </div>
@@ -674,9 +663,6 @@ function normalizeTask(task, clients, members, sla) {
       );
     }
 
-    /* =========================
-       CONFIGURAÇÕES + CRIAR USUÁRIO
-    ========================= */
     function SettingsModal({ onClose, cls, setCls, mbs, setMbs, taskTypes, setTaskTypes, t, currentUser }) {
       const isAdmin = currentUser?.role === "admin";
       const isManager = currentUser?.role === "manager" || isAdmin;
@@ -716,7 +702,11 @@ function normalizeTask(task, clients, members, sla) {
         if (!item.name.trim()) return;
         const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
         const payload = { id, name:item.name.trim(), color:item.color };
-        await sb.from("clients").upsert(payload);
+        const { error } = await sb.from("clients").upsert(payload);
+        if (error) {
+          alert("Erro ao salvar cliente: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         if (item._new) setCls(p => [...p, payload]);
         else setCls(p => p.map(x => x.id === item.id ? payload : x));
         setEditCl(null);
@@ -725,7 +715,11 @@ function normalizeTask(task, clients, members, sla) {
 
       const delCl = async (id) => {
         if (!window.confirm("Excluir este cliente?")) return;
-        await sb.from("clients").delete().eq("id", id);
+        const { error } = await sb.from("clients").delete().eq("id", id);
+        if (error) {
+          alert("Erro ao excluir cliente: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         setCls(p => p.filter(x => x.id !== id));
       };
 
@@ -738,7 +732,11 @@ function normalizeTask(task, clients, members, sla) {
           color:item.color,
           role:item.role || "member"
         };
-        await sb.from("profiles").update(payload).eq("id", item.id);
+        const { error } = await sb.from("profiles").update(payload).eq("id", item.id);
+        if (error) {
+          alert("Erro ao salvar membro: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         setMbs(p => p.map(x => x.id === item.id ? { ...x, ...payload } : x));
         setEditMb(null);
       };
@@ -747,7 +745,11 @@ function normalizeTask(task, clients, members, sla) {
         if (!item.name.trim()) return;
         const id = item.id || item.name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
         const payload = { id, name:item.name.trim(), icon:item.icon || "📋" };
-        await sb.from("task_types").upsert(payload);
+        const { error } = await sb.from("task_types").upsert(payload);
+        if (error) {
+          alert("Erro ao salvar tipo: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         if (item._new) setTaskTypes(p => [...p, payload]);
         else setTaskTypes(p => p.map(x => x.id === item.id ? payload : x));
         setEditTt(null);
@@ -756,12 +758,20 @@ function normalizeTask(task, clients, members, sla) {
 
       const delTt = async (id) => {
         if (!window.confirm("Excluir este tipo de tarefa?")) return;
-        await sb.from("task_types").delete().eq("id", id);
+        const { error } = await sb.from("task_types").delete().eq("id", id);
+        if (error) {
+          alert("Erro ao excluir tipo: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         setTaskTypes(p => p.filter(x => x.id !== id));
       };
 
       const updateRole = async (userId, role) => {
-        await sb.from("profiles").update({ role }).eq("id", userId);
+        const { error } = await sb.from("profiles").update({ role }).eq("id", userId);
+        if (error) {
+          alert("Erro ao alterar papel: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         setMbs(p => p.map(x => x.id === userId ? { ...x, role } : x));
       };
 
@@ -819,12 +829,13 @@ function normalizeTask(task, clients, members, sla) {
                 <div style={{ fontSize:16, fontWeight:800, color:t.text }}>⚙️ Configurações</div>
                 <div style={{ fontSize:11, color:t.mut, marginTop:2 }}>Gerencie clientes, equipe, tipos e usuários</div>
               </div>
-              <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:t.mut }}>×</button>
+              <button type="button" onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:t.mut }}>×</button>
             </div>
 
             <div style={{ display:"flex", padding:"14px 24px 0", borderBottom:"1px solid " + t.brd, overflowX:"auto" }}>
               {tabs.map(tb => (
                 <button
+                  type="button"
                   key={tb.id}
                   onClick={() => setTab(tb.id)}
                   style={{
@@ -851,15 +862,15 @@ function normalizeTask(task, clients, members, sla) {
                         <>
                           <input value={editCl.name} onChange={e=>setEditCl(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
                           <input type="color" value={editCl.color} onChange={e=>setEditCl(p=>({...p,color:e.target.value}))} style={{ width:32, height:32, border:"none", padding:0 }} />
-                          <button onClick={()=>saveCl(editCl)} style={bS("#0984E3","#fff")}>✓</button>
-                          <button onClick={()=>setEditCl(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                          <button type="button" onClick={()=>saveCl(editCl)} style={bS("#0984E3","#fff")}>✓</button>
+                          <button type="button" onClick={()=>setEditCl(null)} style={bS(t.colBg,t.mut)}>✕</button>
                         </>
                       ) : (
                         <>
                           <div style={{ width:14, height:14, borderRadius:3, background:c.color, flexShrink:0 }} />
                           <span style={{ flex:1, fontSize:13, fontWeight:600, color:t.text }}>{c.name}</span>
-                          <button onClick={()=>setEditCl({...c})} style={bS(t.colBg,t.mut)}>✏️</button>
-                          {isManager && <button onClick={()=>delCl(c.id)} style={bS("#FF767522","#D63031")}>🗑</button>}
+                          <button type="button" onClick={()=>setEditCl({...c})} style={bS(t.colBg,t.mut)}>✏️</button>
+                          {isManager && <button type="button" onClick={()=>delCl(c.id)} style={bS("#FF767522","#D63031")}>🗑</button>}
                         </>
                       )}
                     </Row>
@@ -871,7 +882,7 @@ function normalizeTask(task, clients, members, sla) {
                       <div style={{ display:"flex", gap:8 }}>
                         <input value={newCl.name} onChange={e=>setNewCl(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} placeholder="Nome do cliente" />
                         <input type="color" value={newCl.color} onChange={e=>setNewCl(p=>({...p,color:e.target.value}))} style={{ width:36, height:36, border:"none", padding:0 }} />
-                        <button onClick={()=>saveCl({...newCl,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
+                        <button type="button" onClick={()=>saveCl({...newCl,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
                       </div>
                     </div>
                   )}
@@ -888,8 +899,8 @@ function normalizeTask(task, clients, members, sla) {
                           <input value={editMb.name} onChange={e=>setEditMb(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
                           <input value={editMb.initials} onChange={e=>setEditMb(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))} style={{...iS, width:48}} />
                           <input type="color" value={editMb.color} onChange={e=>setEditMb(p=>({...p,color:e.target.value}))} style={{ width:32, height:32, border:"none", padding:0 }} />
-                          <button onClick={()=>saveMb(editMb)} style={bS("#0984E3","#fff")}>✓</button>
-                          <button onClick={()=>setEditMb(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                          <button type="button" onClick={()=>saveMb(editMb)} style={bS("#0984E3","#fff")}>✓</button>
+                          <button type="button" onClick={()=>setEditMb(null)} style={bS(t.colBg,t.mut)}>✕</button>
                         </>
                       ) : (
                         <>
@@ -900,7 +911,7 @@ function normalizeTask(task, clients, members, sla) {
                             <div style={{ fontSize:13, fontWeight:600, color:t.text }}>{m.name}</div>
                             <div style={{ fontSize:10, color:t.mut }}>{m.email} · {ROLE_LABELS[m.role] || "Membro"}</div>
                           </div>
-                          {(m.id===currentUser?.id || isAdmin) && <button onClick={()=>setEditMb({...m})} style={bS(t.colBg,t.mut)}>✏️</button>}
+                          {(m.id===currentUser?.id || isAdmin) && <button type="button" onClick={()=>setEditMb({...m})} style={bS(t.colBg,t.mut)}>✏️</button>}
                         </>
                       )}
                     </Row>
@@ -917,16 +928,16 @@ function normalizeTask(task, clients, members, sla) {
                         <>
                           <input value={editTt.icon} onChange={e=>setEditTt(p=>({...p,icon:e.target.value}))} style={{...iS, width:48, textAlign:"center"}} />
                           <input value={editTt.name} onChange={e=>setEditTt(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
-                          <button onClick={()=>saveTt(editTt)} style={bS("#0984E3","#fff")}>✓</button>
-                          <button onClick={()=>setEditTt(null)} style={bS(t.colBg,t.mut)}>✕</button>
+                          <button type="button" onClick={()=>saveTt(editTt)} style={bS("#0984E3","#fff")}>✓</button>
+                          <button type="button" onClick={()=>setEditTt(null)} style={bS(t.colBg,t.mut)}>✕</button>
                         </>
                       ) : (
                         <>
                           <span style={{ fontSize:18, flexShrink:0 }}>{tt.icon}</span>
                           <span style={{ flex:1, fontSize:13, fontWeight:600, color:t.text }}>{tt.name}</span>
                           {isManager && <>
-                            <button onClick={()=>setEditTt({...tt})} style={bS(t.colBg,t.mut)}>✏️</button>
-                            <button onClick={()=>delTt(tt.id)} style={bS("#FF767522","#D63031")}>🗑</button>
+                            <button type="button" onClick={()=>setEditTt({...tt})} style={bS(t.colBg,t.mut)}>✏️</button>
+                            <button type="button" onClick={()=>delTt(tt.id)} style={bS("#FF767522","#D63031")}>🗑</button>
                           </>}
                         </>
                       )}
@@ -939,7 +950,7 @@ function normalizeTask(task, clients, members, sla) {
                       <div style={{ display:"flex", gap:8 }}>
                         <input value={newTt.icon} onChange={e=>setNewTt(p=>({...p,icon:e.target.value}))} style={{...iS, width:52, textAlign:"center"}} />
                         <input value={newTt.name} onChange={e=>setNewTt(p=>({...p,name:e.target.value}))} style={{...iS, flex:1}} />
-                        <button onClick={()=>saveTt({...newTt,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
+                        <button type="button" onClick={()=>saveTt({...newTt,_new:true})} style={bS("#0984E3","#fff")}>Adicionar</button>
                       </div>
                     </div>
                   )}
@@ -998,68 +1009,26 @@ function normalizeTask(task, clients, members, sla) {
                     </div>
 
                     <div style={{ display:"grid", gap:8 }}>
-                      <input
-                        placeholder="Email"
-                        value={newUser.email}
-                        onChange={e=>setNewUser(p=>({...p,email:e.target.value}))}
-                        style={iS}
-                      />
+                      <input placeholder="Email" value={newUser.email} onChange={e=>setNewUser(p=>({...p,email:e.target.value}))} style={iS} />
+                      <input placeholder="Senha inicial" value={newUser.password} onChange={e=>setNewUser(p=>({...p,password:e.target.value}))} style={iS} />
+                      <input placeholder="Nome" value={newUser.name} onChange={e=>setNewUser(p=>({...p,name:e.target.value}))} style={iS} />
+                      <input placeholder="Iniciais" value={newUser.initials} onChange={e=>setNewUser(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))} style={iS} />
 
-                      <input
-                        placeholder="Senha inicial"
-                        value={newUser.password}
-                        onChange={e=>setNewUser(p=>({...p,password:e.target.value}))}
-                        style={iS}
-                      />
-
-                      <input
-                        placeholder="Nome"
-                        value={newUser.name}
-                        onChange={e=>setNewUser(p=>({...p,name:e.target.value}))}
-                        style={iS}
-                      />
-
-                      <input
-                        placeholder="Iniciais"
-                        value={newUser.initials}
-                        onChange={e=>setNewUser(p=>({...p,initials:e.target.value.toUpperCase().slice(0,2)}))}
-                        style={iS}
-                      />
-
-                      <select
-                        value={newUser.role}
-                        onChange={e=>setNewUser(p=>({...p,role:e.target.value}))}
-                        style={iS}
-                      >
+                      <select value={newUser.role} onChange={e=>setNewUser(p=>({...p,role:e.target.value}))} style={iS}>
                         <option value="member">👤 Membro</option>
                         <option value="manager">👔 Gerente</option>
                         <option value="admin">🔑 Admin</option>
                       </select>
 
-                      <input
-                        type="color"
-                        value={newUser.color}
-                        onChange={e=>setNewUser(p=>({...p,color:e.target.value}))}
-                        style={{ width:48, height:36, border:"none", padding:0 }}
-                      />
+                      <input type="color" value={newUser.color} onChange={e=>setNewUser(p=>({...p,color:e.target.value}))} style={{ width:48, height:36, border:"none", padding:0 }} />
 
-                      <button
-                        onClick={createUserFromApp}
-                        style={{
-                          padding:10,
-                          borderRadius:8,
-                          background:"#0984E3",
-                          color:"#fff",
-                          border:"none",
-                          fontWeight:700
-                        }}
-                      >
+                      <button type="button" onClick={createUserFromApp} style={{
+                        padding:10, borderRadius:8, background:"#0984E3", color:"#fff", border:"none", fontWeight:700
+                      }}>
                         Criar usuário
                       </button>
 
-                      <div style={{ fontSize:12, color:t.mut }}>
-                        {msgUser}
-                      </div>
+                      <div style={{ fontSize:12, color:t.mut }}>{msgUser}</div>
                     </div>
                   </div>
                 </div>
@@ -1067,16 +1036,13 @@ function normalizeTask(task, clients, members, sla) {
             </div>
 
             <div style={{ padding:"12px 24px", borderTop:"1px solid " + t.brd, display:"flex", justifyContent:"flex-end" }}>
-              <button onClick={onClose} style={bS("#0984E3","#fff")}>Fechar</button>
+              <button type="button" onClick={onClose} style={bS("#0984E3","#fff")}>Fechar</button>
             </div>
           </div>
         </div>
       );
     }
 
-    /* =========================
-       FILTROS
-    ========================= */
     function Filters({ filters, setF, cls, mbs, t, tasks }) {
       const s = {
         padding:"6px 10px", borderRadius:8, border:"1px solid " + t.brd,
@@ -1153,9 +1119,6 @@ function normalizeTask(task, clients, members, sla) {
       );
     }
 
-    /* =========================
-       APP
-    ========================= */
     function App() {
       const [session, setSession] = useState(null);
       const [authLoading, setAuthLoading] = useState(true);
@@ -1208,50 +1171,50 @@ function normalizeTask(task, clients, members, sla) {
       useEffect(() => {
         if (!session?.access_token) return;
 
-       async function loadAll() {
-  const [
-    { data: tk, error: tkErr },
-    { data: cl, error: clErr },
-    { data: mb, error: mbErr },
-    { data: tt, error: ttErr },
-    { data: sl, error: slErr },
-  ] = await Promise.all([
-    sb.from("tasks").select("*").order("created_at", { ascending:false }),
-    sb.from("clients").select("*").order("name"),
-    sb.from("profiles").select("*").order("name"),
-    sb.from("task_types").select("*").order("name"),
-    sb.from("sla_config").select("*"),
-  ]);
+        async function loadAll() {
+          const [
+            { data: tk, error: tkErr },
+            { data: cl, error: clErr },
+            { data: mb, error: mbErr },
+            { data: tt, error: ttErr },
+            { data: sl, error: slErr },
+          ] = await Promise.all([
+            sb.from("tasks").select("*").order("created_at", { ascending:false }),
+            sb.from("clients").select("*").order("name"),
+            sb.from("profiles").select("*").order("name"),
+            sb.from("task_types").select("*").order("name"),
+            sb.from("sla_config").select("*"),
+          ]);
 
-  const safeSla = sl && sl.length
-    ? Object.fromEntries(sl.map(x => [x.priority, x.days]))
-    : { baixa:30, media:10, importante:5, urgente:2 };
+          const safeSla = sl && sl.length
+            ? Object.fromEntries(sl.map(x => [x.priority, x.days]))
+            : { baixa:30, media:10, importante:5, urgente:2 };
 
-  const safeClients = clErr || !cl || !cl.length ? DEFAULT_CLIENTS : cl;
-  const safeMembers = mbErr || !mb || !mb.length ? DEFAULT_MEMBERS : mb;
-  const safeTaskTypes = ttErr || !tt || !tt.length ? DEFAULT_TASK_TYPES : tt;
+          const safeClients = clErr || !cl || !cl.length ? DEFAULT_CLIENTS : cl;
+          const safeMembers = mbErr || !mb || !mb.length ? DEFAULT_MEMBERS : mb;
+          const safeTaskTypes = ttErr || !tt || !tt.length ? DEFAULT_TASK_TYPES : tt;
 
-  setCls(safeClients);
-  setMbs(safeMembers);
-  setTaskTypes(safeTaskTypes);
-  setSla(safeSla);
+          setCls(safeClients);
+          setMbs(safeMembers);
+          setTaskTypes(safeTaskTypes);
+          setSla(safeSla);
 
-  const normalizedTasks = (tkErr || !tk || !tk.length ? SAMPLE_TASKS : tk)
-    .map(item => normalizeTask(item, safeClients, safeMembers, safeSla));
+          const normalizedTasks = (tkErr || !tk || !tk.length ? SAMPLE_TASKS : tk)
+            .map(item => normalizeTask(item, safeClients, safeMembers, safeSla));
 
-  setTasks(normalizedTasks);
+          setTasks(normalizedTasks);
 
-  const me =
-    safeMembers.find(x => x.id === session.user?.id) ||
-    safeMembers.find(x => x.email === session.user?.email) ||
-    safeMembers.find(x => x.email === "leandro.vettori@globalcad.com.br") ||
-    safeMembers[0] ||
-    null;
+          const me =
+            safeMembers.find(x => x.id === session.user?.id) ||
+            safeMembers.find(x => x.email === session.user?.email) ||
+            safeMembers.find(x => x.email === "leandro.vettori@globalcad.com.br") ||
+            safeMembers[0] ||
+            null;
 
-  if (me) setCurrentUser(me);
+          if (me) setCurrentUser(me);
 
-  setLoaded(true);
-}
+          setLoaded(true);
+        }
 
         loadAll();
       }, [session?.access_token]);
@@ -1260,64 +1223,64 @@ function normalizeTask(task, clients, members, sla) {
         localStorage.setItem("gc-theme", theme);
       }, [theme]);
 
-    const hSave = async (f) => {
-  const created = f.created_at || f.created || new Date().toISOString().slice(0,10);
+      const hSave = async (f) => {
+        const created = f.created_at || f.created || new Date().toISOString().slice(0,10);
 
-  const payload = {
-    title: f.title?.trim(),
-    description: f.description || "",
-    column: COLUMNS.some(c => c.id === f.column) ? f.column : "pendente",
-    client_id: f.client_id || cls[0]?.id || null,
-    priority: f.priority || "media",
-    assignee_id: f.assignee_id || currentUser?.id || mbs[0]?.id || null,
-    requester_id: f.requester_id || currentUser?.id || mbs[0]?.id || null,
-    task_type: f.task_type || null,
-    deadline: f.deadline || calcDeadline(String(created).slice(0,10), f.priority || "media", sla),
-    created_at: created,
-  };
+        const payload = {
+          title: f.title?.trim(),
+          description: f.description || "",
+          column: COLUMNS.some(c => c.id === f.column) ? f.column : "pendente",
+          client_id: f.client_id || cls[0]?.id || null,
+          priority: f.priority || "media",
+          assignee_id: f.assignee_id || currentUser?.id || mbs[0]?.id || null,
+          requester_id: f.requester_id || currentUser?.id || mbs[0]?.id || null,
+          task_type: f.task_type || null,
+          deadline: f.deadline || calcDeadline(String(created).slice(0,10), f.priority || "media", sla),
+          created_at: created,
+        };
 
-  if (!payload.title) {
-    alert("Informe o título da tarefa.");
-    return false;
-  }
+        if (!payload.title) {
+          alert("Informe o título da tarefa.");
+          return false;
+        }
 
-  if (f.id) {
-    const { data, error } = await sb.from("tasks")
-      .update(payload)
-      .eq("id", f.id)
-      .select()
-      .single();
+        if (f.id) {
+          const { data, error } = await sb.from("tasks")
+            .update(payload)
+            .eq("id", f.id)
+            .select()
+            .single();
 
-    if (error) {
-      alert("Erro ao atualizar tarefa: " + (error.message || JSON.stringify(error)));
-      console.error("update task error:", error);
-      return false;
-    }
+          if (error) {
+            alert("Erro ao atualizar tarefa: " + (error.message || JSON.stringify(error)));
+            console.error("update task error:", error);
+            return false;
+          }
 
-    if (data) {
-      const normalized = normalizeTask(data, cls, mbs, sla);
-      setTasks(p => p.map(x => x.id === f.id ? normalized : x));
-    }
-    return true;
-  } else {
-    const { data, error } = await sb.from("tasks")
-      .insert(payload)
-      .select()
-      .single();
+          if (data) {
+            const normalized = normalizeTask(data, cls, mbs, sla);
+            setTasks(p => p.map(x => x.id === f.id ? normalized : x));
+          }
+          return true;
+        } else {
+          const { data, error } = await sb.from("tasks")
+            .insert(payload)
+            .select()
+            .single();
 
-    if (error) {
-      alert("Erro ao criar tarefa: " + (error.message || JSON.stringify(error)));
-      console.error("insert task error:", error, payload);
-      return false;
-    }
+          if (error) {
+            alert("Erro ao criar tarefa: " + (error.message || JSON.stringify(error)));
+            console.error("insert task error:", error, payload);
+            return false;
+          }
 
-    if (data) {
-      const normalized = normalizeTask(data, cls, mbs, sla);
-      setTasks(p => [normalized, ...p]);
-    }
-    return true;
-  }
-};
+          if (data) {
+            const normalized = normalizeTask(data, cls, mbs, sla);
+            setTasks(p => [normalized, ...p]);
+          }
+          return true;
+        }
+      };
 
       const hDrop = async (tid, col) => {
         setTasks(p => p.map(x => x.id===tid ? { ...x, column:col } : x));
@@ -1330,7 +1293,11 @@ function normalizeTask(task, clients, members, sla) {
       };
 
       const hNC = async (c) => {
-        await sb.from("clients").upsert({ id:c.id, name:c.name, color:c.color });
+        const { error } = await sb.from("clients").upsert({ id:c.id, name:c.name, color:c.color });
+        if (error) {
+          alert("Erro ao criar cliente: " + (error.message || JSON.stringify(error)));
+          return;
+        }
         setCls(p => [...p.filter(x => x.id!==c.id), c]);
       };
 
@@ -1356,20 +1323,20 @@ function normalizeTask(task, clients, members, sla) {
       const lateCount = tasks.filter(x => getSlaInfo(x, sla).status==="late").length;
 
       const nT = () => {
-  const td = new Date().toISOString().slice(0,10);
-  setMdl({
-    title: "",
-    description: "",
-    column: "pendente",
-    client_id: cls[0]?.id || DEFAULT_CLIENTS[0].id,
-    priority: "media",
-    assignee_id: currentUser?.id || mbs[0]?.id || DEFAULT_MEMBERS[0].id,
-    requester_id: currentUser?.id || mbs[0]?.id || DEFAULT_MEMBERS[0].id,
-    task_type: "",
-    created_at: td,
-    deadline: calcDeadline(td, "media", sla),
-  });
-};
+        const td = new Date().toISOString().slice(0,10);
+        setMdl({
+          title: "",
+          description: "",
+          column: "pendente",
+          client_id: cls[0]?.id || DEFAULT_CLIENTS[0].id,
+          priority: "media",
+          assignee_id: currentUser?.id || mbs[0]?.id || DEFAULT_MEMBERS[0].id,
+          requester_id: currentUser?.id || mbs[0]?.id || DEFAULT_MEMBERS[0].id,
+          task_type: "",
+          created_at: td,
+          deadline: calcDeadline(td, "media", sla),
+        });
+      };
 
       const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer" };
 
@@ -1416,12 +1383,13 @@ function normalizeTask(task, clients, members, sla) {
             )}
 
             <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-              <button onClick={()=>setShowSla(!showSla)} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid " + t.brd}}>⏱ SLA</button>
-              <button onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:16}}>{theme==="dark"?"☀":"🌙"}</button>
-              <button onClick={()=>setShowSettings(true)} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:14}}>⚙️</button>
+              <button type="button" onClick={()=>setShowSla(!showSla)} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid " + t.brd}}>⏱ SLA</button>
+              <button type="button" onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:16}}>{theme==="dark"?"☀":"🌙"}</button>
+              <button type="button" onClick={()=>setShowSettings(true)} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:14}}>⚙️</button>
 
               {["kanban","table"].map(v => (
                 <button
+                  type="button"
                   key={v}
                   onClick={()=>setView(v)}
                   style={{
@@ -1434,11 +1402,11 @@ function normalizeTask(task, clients, members, sla) {
                 </button>
               ))}
 
-              <button onClick={nT} style={{...bS, padding:"8px 14px", background:"#0984E3", color:"#fff", fontWeight:700, fontSize:12}}>
+              <button type="button" onClick={nT} style={{...bS, padding:"8px 14px", background:"#0984E3", color:"#fff", fontWeight:700, fontSize:12}}>
                 + Nova Tarefa
               </button>
 
-              <button onClick={async ()=>{
+              <button type="button" onClick={async ()=>{
                 await sb.auth.signOut();
                 setSession(null);
               }} style={{...bS, padding:"6px 11px", background:t.colBg, color:t.mut, fontSize:11, fontWeight:700, border:"1px solid " + t.brd}}>
@@ -1473,6 +1441,7 @@ function normalizeTask(task, clients, members, sla) {
                   </div>
                 ))}
                 <button
+                  type="button"
                   onClick={async ()=>{
                     await Promise.all(PRIORITIES.map(p=>sb.from("sla_config").update({days:sla[p.id]}).eq("priority", p.id)));
                     setShowSla(false);
@@ -1481,7 +1450,7 @@ function normalizeTask(task, clients, members, sla) {
                 >
                   Salvar
                 </button>
-                <button onClick={()=>setShowSla(false)} style={{...bS, padding:"4px 12px", background:t.card, color:t.mut, fontSize:11}}>Fechar</button>
+                <button type="button" onClick={()=>setShowSla(false)} style={{...bS, padding:"4px 12px", background:t.card, color:t.mut, fontSize:11}}>Fechar</button>
               </div>
             </div>
           )}
