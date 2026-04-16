@@ -471,12 +471,10 @@
 
       const handleSave = async () => {
         if (!f.title.trim()) return;
-
         setSaving(true);
-        const ok = await onSave(f);
+        await onSave(f);
         setSaving(false);
-
-        if (ok) onClose();
+        onClose();
       };
 
       const addClient = () => {
@@ -1166,50 +1164,16 @@
       }, [theme]);
 
       const hSave = async (f) => {
-       const hSave = async (f) => {
-  const payload = {
-    title:        f.title,
-    description:  f.description || "",
-    column:       f.column,
-    client_id:    f.client_id || f.client || null,
-    priority:     f.priority,
-    assignee_id:  f.assignee_id || f.assignee || null,
-    requester_id: f.requester_id || f.requester || null,
-    task_type:    f.task_type || f.taskType || null,
-    deadline:     f.deadline || null,
-  };
-
-  if (f.id) {
-    const { data, error } = await sb.from("tasks")
-      .update(payload)
-      .eq("id", f.id)
-      .select()
-      .single();
-
-    if (error) {
-      alert("Erro ao atualizar tarefa: " + (error.message || JSON.stringify(error)));
-      console.error("Erro update task:", error);
-      return false;
-    }
-
-    if (data) setTasks(p => p.map(x => x.id === f.id ? { ...x, ...data } : x));
-    return true;
-  } else {
-    const { data, error } = await sb.from("tasks")
-      .insert(payload)
-      .select()
-      .single();
-
-    if (error) {
-      alert("Erro ao criar tarefa: " + (error.message || JSON.stringify(error)));
-      console.error("Erro insert task:", error, payload);
-      return false;
-    }
-
-    if (data) setTasks(p => [data, ...p]);
-    return true;
-  }
-};
+        const payload = {
+          title:f.title,
+          description:f.description || "",
+          column:f.column,
+          client_id:f.client_id || null,
+          priority:f.priority,
+          assignee_id:f.assignee_id || null,
+          requester_id:f.requester_id || null,
+          task_type:f.task_type || null,
+          deadline:f.deadline || null,
         };
 
         if (f.id) {
