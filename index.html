@@ -226,7 +226,84 @@
 
     const ROLE_LABELS = { admin:"🔑 Admin", manager:"👔 Gerente", member:"👤 Membro" };
     const PCOLORS = ["#6C5CE7","#00B894","#E17055","#D63031","#0984E3","#FDCB6E","#00CEC9","#A29BFE","#E84393","#FF9800"];
+    const DEFAULT_CLIENTS = [
+  { id:"delta", name:"DELTA", color:"#0984E3" },
+  { id:"enep", name:"ENEP", color:"#00B894" },
+  { id:"engedata", name:"ENGEDATA", color:"#E17055" },
+  { id:"florecer", name:"FLORECER", color:"#6C5CE7" },
+];
 
+const DEFAULT_MEMBERS = [
+  { id:"leandro", name:"Leandro Vettori", initials:"LV", color:"#00B894", role:"admin", email:"leandro.vettori@globalcad.com.br" },
+  { id:"bruno", name:"Bruno Neves", initials:"BN", color:"#0984E3", role:"member" },
+  { id:"gabriel", name:"Gabriel Nazareth", initials:"GN", color:"#E17055", role:"member" },
+];
+
+const DEFAULT_TASK_TYPES = [
+  { id:"reuniao", name:"Reunião Implantação", icon:"🤝" },
+  { id:"execucao", name:"Execução Implantação", icon:"⚙️" },
+  { id:"liberacao", name:"Liberação para Operação", icon:"🚀" },
+];
+
+const SAMPLE_TASKS = [
+  {
+    id: "sample-1",
+    title: "Reunião Implantação — DELTA",
+    description: "",
+    column: "pendente",
+    client_id: "delta",
+    priority: "media",
+    assignee_id: "leandro",
+    requester_id: "leandro",
+    task_type: "reuniao",
+    created_at: "2026-04-01",
+    deadline: "2026-04-11"
+  },
+  {
+    id: "sample-2",
+    title: "Execução Implantação — ENEP",
+    description: "",
+    column: "andamento",
+    client_id: "enep",
+    priority: "importante",
+    assignee_id: "bruno",
+    requester_id: "leandro",
+    task_type: "execucao",
+    created_at: "2026-04-02",
+    deadline: "2026-04-07"
+  },
+  {
+    id: "sample-3",
+    title: "Liberação para Operação — ENGEDATA",
+    description: "",
+    column: "concluido",
+    client_id: "engedata",
+    priority: "urgente",
+    assignee_id: "gabriel",
+    requester_id: "leandro",
+    task_type: "liberacao",
+    created_at: "2026-04-03",
+    deadline: "2026-04-05"
+  }
+];
+
+function normalizeTask(task, clients, members, sla) {
+  const validClient = clients.find(c => c.id === (task.client_id || task.client));
+  const validAssignee = members.find(m => m.id === (task.assignee_id || task.assignee));
+  const validRequester = members.find(m => m.id === (task.requester_id || task.requester));
+  const created = task.created_at || task.created || new Date().toISOString().slice(0,10);
+
+  return {
+    ...task,
+    column: COLUMNS.some(c => c.id === task.column) ? task.column : "pendente",
+    client_id: validClient?.id || clients[0]?.id || "",
+    assignee_id: validAssignee?.id || members[0]?.id || "",
+    requester_id: validRequester?.id || members[0]?.id || "",
+    task_type: task.task_type || task.taskType || "",
+    created_at: created,
+    deadline: task.deadline || calcDeadline(String(created).slice(0,10), task.priority || "media", sla),
+  };
+}
     const LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40">
         <rect width="180" height="40" rx="8" fill="#0F1117"/>
@@ -399,7 +476,7 @@
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ fontSize:10, color:t.mut, fontFamily:"monospace" }}>
-                {task.created_at ? String(task.created_at).slice(0,10) : ""}
+                {String(task.created_at || task.created || "").slice(0,10)}
               </span>
               <SlaTag task={task} sla={sla} small />
             </div>
@@ -470,12 +547,14 @@
       const set = (k, v) => sF(p => ({ ...p, [k]:v }));
 
       const handleSave = async () => {
-        if (!f.title.trim()) return;
-        setSaving(true);
-        await onSave(f);
-        setSaving(false);
-        onClose();
-      };
+         if (!f.title.trim()) return;
+
+         setSaving(true);
+         const ok = await onSave(f);
+         setSaving(false);
+
+         if (ok) onClose();
+       };
 
       const addClient = () => {
         if (!nc.name.trim()) return;
@@ -1129,32 +1208,50 @@
       useEffect(() => {
         if (!session?.access_token) return;
 
-        async function loadAll() {
-          const [
-            { data: tk },
-            { data: cl },
-            { data: mb },
-            { data: tt },
-            { data: sl },
-          ] = await Promise.all([
-            sb.from("tasks").select("*").order("created_at", { ascending:false }),
-            sb.from("clients").select("*").order("name"),
-            sb.from("profiles").select("*").order("name"),
-            sb.from("task_types").select("*").order("name"),
-            sb.from("sla_config").select("*"),
-          ]);
+       async function loadAll() {
+  const [
+    { data: tk, error: tkErr },
+    { data: cl, error: clErr },
+    { data: mb, error: mbErr },
+    { data: tt, error: ttErr },
+    { data: sl, error: slErr },
+  ] = await Promise.all([
+    sb.from("tasks").select("*").order("created_at", { ascending:false }),
+    sb.from("clients").select("*").order("name"),
+    sb.from("profiles").select("*").order("name"),
+    sb.from("task_types").select("*").order("name"),
+    sb.from("sla_config").select("*"),
+  ]);
 
-          if (tk) setTasks(tk);
-          if (cl) setCls(cl);
-          if (mb) {
-            setMbs(mb);
-            const me = mb.find(x => x.id === session.user?.id) || mb.find(x => x.email === session.user?.email);
-            if (me) setCurrentUser(me);
-          }
-          if (tt) setTaskTypes(tt);
-          if (sl) setSla(Object.fromEntries(sl.map(x => [x.priority, x.days])));
-          setLoaded(true);
-        }
+  const safeSla = sl && sl.length
+    ? Object.fromEntries(sl.map(x => [x.priority, x.days]))
+    : { baixa:30, media:10, importante:5, urgente:2 };
+
+  const safeClients = clErr || !cl || !cl.length ? DEFAULT_CLIENTS : cl;
+  const safeMembers = mbErr || !mb || !mb.length ? DEFAULT_MEMBERS : mb;
+  const safeTaskTypes = ttErr || !tt || !tt.length ? DEFAULT_TASK_TYPES : tt;
+
+  setCls(safeClients);
+  setMbs(safeMembers);
+  setTaskTypes(safeTaskTypes);
+  setSla(safeSla);
+
+  const normalizedTasks = (tkErr || !tk || !tk.length ? SAMPLE_TASKS : tk)
+    .map(item => normalizeTask(item, safeClients, safeMembers, safeSla));
+
+  setTasks(normalizedTasks);
+
+  const me =
+    safeMembers.find(x => x.id === session.user?.id) ||
+    safeMembers.find(x => x.email === session.user?.email) ||
+    safeMembers.find(x => x.email === "leandro.vettori@globalcad.com.br") ||
+    safeMembers[0] ||
+    null;
+
+  if (me) setCurrentUser(me);
+
+  setLoaded(true);
+}
 
         loadAll();
       }, [session?.access_token]);
@@ -1163,27 +1260,64 @@
         localStorage.setItem("gc-theme", theme);
       }, [theme]);
 
-      const hSave = async (f) => {
-        const payload = {
-          title:f.title,
-          description:f.description || "",
-          column:f.column,
-          client_id:f.client_id || null,
-          priority:f.priority,
-          assignee_id:f.assignee_id || null,
-          requester_id:f.requester_id || null,
-          task_type:f.task_type || null,
-          deadline:f.deadline || null,
-        };
+    const hSave = async (f) => {
+  const created = f.created_at || f.created || new Date().toISOString().slice(0,10);
 
-        if (f.id) {
-          const { data } = await sb.from("tasks").update(payload).eq("id", f.id).select().single();
-          if (data) setTasks(p => p.map(x => x.id === f.id ? { ...x, ...data } : x));
-        } else {
-          const { data } = await sb.from("tasks").insert(payload).select().single();
-          if (data) setTasks(p => [data, ...p]);
-        }
-      };
+  const payload = {
+    title: f.title?.trim(),
+    description: f.description || "",
+    column: COLUMNS.some(c => c.id === f.column) ? f.column : "pendente",
+    client_id: f.client_id || cls[0]?.id || null,
+    priority: f.priority || "media",
+    assignee_id: f.assignee_id || currentUser?.id || mbs[0]?.id || null,
+    requester_id: f.requester_id || currentUser?.id || mbs[0]?.id || null,
+    task_type: f.task_type || null,
+    deadline: f.deadline || calcDeadline(String(created).slice(0,10), f.priority || "media", sla),
+    created_at: created,
+  };
+
+  if (!payload.title) {
+    alert("Informe o título da tarefa.");
+    return false;
+  }
+
+  if (f.id) {
+    const { data, error } = await sb.from("tasks")
+      .update(payload)
+      .eq("id", f.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert("Erro ao atualizar tarefa: " + (error.message || JSON.stringify(error)));
+      console.error("update task error:", error);
+      return false;
+    }
+
+    if (data) {
+      const normalized = normalizeTask(data, cls, mbs, sla);
+      setTasks(p => p.map(x => x.id === f.id ? normalized : x));
+    }
+    return true;
+  } else {
+    const { data, error } = await sb.from("tasks")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error) {
+      alert("Erro ao criar tarefa: " + (error.message || JSON.stringify(error)));
+      console.error("insert task error:", error, payload);
+      return false;
+    }
+
+    if (data) {
+      const normalized = normalizeTask(data, cls, mbs, sla);
+      setTasks(p => [normalized, ...p]);
+    }
+    return true;
+  }
+};
 
       const hDrop = async (tid, col) => {
         setTasks(p => p.map(x => x.id===tid ? { ...x, column:col } : x));
@@ -1222,19 +1356,20 @@
       const lateCount = tasks.filter(x => getSlaInfo(x, sla).status==="late").length;
 
       const nT = () => {
-        const td = new Date().toISOString().slice(0,10);
-        setMdl({
-          title:"",
-          column:"pendente",
-          client_id:cls[0]?.id || "",
-          priority:"media",
-          assignee_id:currentUser?.id || "",
-          requester_id:currentUser?.id || "",
-          description:"",
-          deadline:calcDeadline(td, "media", sla),
-          task_type:""
-        });
-      };
+  const td = new Date().toISOString().slice(0,10);
+  setMdl({
+    title: "",
+    description: "",
+    column: "pendente",
+    client_id: cls[0]?.id || DEFAULT_CLIENTS[0].id,
+    priority: "media",
+    assignee_id: currentUser?.id || mbs[0]?.id || DEFAULT_MEMBERS[0].id,
+    requester_id: currentUser?.id || mbs[0]?.id || DEFAULT_MEMBERS[0].id,
+    task_type: "",
+    created_at: td,
+    deadline: calcDeadline(td, "media", sla),
+  });
+};
 
       const bS = { padding:"8px 18px", borderRadius:8, border:"none", fontSize:13, cursor:"pointer" };
 
@@ -1388,7 +1523,8 @@
                   {filtered.map(tk => {
                     const col = COLUMNS.find(c=>c.id===tk.column);
                     const tt = taskTypes.find(x=>x.id===tk.task_type);
-                    const dl = tk.deadline || calcDeadline(String(tk.created_at||"").slice(0,10), tk.priority, sla);
+                    const created = String(tk.created_at || tk.created || "").slice(0,10);
+                    const dl = tk.deadline || calcDeadline(created, tk.priority, sla);
 
                     return (
                       <tr key={tk.id} onClick={()=>setMdl(tk)} style={{ borderBottom:"1px solid " + t.brd, cursor:"pointer" }}>
